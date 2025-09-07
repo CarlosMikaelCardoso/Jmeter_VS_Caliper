@@ -19,7 +19,7 @@ case $NUM_USERS in
 esac
 
 CALIPER_BENCHCONFIG="$(pwd)/${NUM_USERS}_Users/caliper/simple/config.yaml"
-CALIPER_NETWORKCONFIG="$(pwd)/../meu-contrato/networkconfig.json"
+CALIPER_NETWORKCONFIG="$(pwd)/networkconfig.json"
 CALIPER_WORKSPACE="."
 CONTRACT_ADDRESS_FILE="../besu-production-docker/testes/contract_address.txt"
 TESTE_DIR="$(pwd)"
