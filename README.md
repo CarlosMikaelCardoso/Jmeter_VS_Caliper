@@ -47,7 +47,17 @@ cd testes
 Por padrão o Caliper executa apenas uma vez o teste com 5 Workers
 
 # Jmeter
+No Jmeter precisamos executar a API para que ele consiga realizar as operações
+
 ``` bash
+cd api-besu
+npm install # Instala as dependências para a API
+node api_load_balancer
+```
+Em outro terminal
+
+``` bash
+./Jmeter_VS_Caliper/testes
 ./run_jmeter.sh <número de usuários> <número de repetições>
 ```
 Por padrão o Caliper executa apenas uma vez o teste com 5 Threads
