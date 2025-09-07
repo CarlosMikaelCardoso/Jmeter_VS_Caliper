@@ -52,6 +52,9 @@ No Jmeter precisamos executar a API para que ele consiga realizar as operações
 ``` bash
 cd api-besu
 npm install # Instala as dependências para a API
+# Exporte as variáveis de ambiente necessárias para a configuração do Besu.
+export DEPLOYER_PRIVATE_KEY="0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63"
+export CONTRACT_ADDRESS="<endereço do contrato>" # Esse endereço esta no /testes/contract_address.txt 
 node api_load_balancer
 ```
 Em outro terminal
