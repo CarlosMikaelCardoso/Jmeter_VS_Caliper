@@ -24,7 +24,10 @@ Siga os passos abaixo para configurar o projeto em sua máquina:
 
 1. Clone este repositório:
    ```bash
-   git clone https://github.com/CarlosMikaelCardoso/besu-production-docker.git
+   git clone https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git
+   git clone https://github.com/hyperledger-caliper/caliper-benchmarks.git
+   cd caliper-benchmarks
+   git checkout v0.6.0
    ```
 2. Execute o script de configuração da rede. Ele irá preparar todos os arquivos necessários para os nós.
    ```bash
@@ -32,18 +35,25 @@ Siga os passos abaixo para configurar o projeto em sua máquina:
    ./setup_besu_networks.sh
    ```
 
-## Deploy e Teste de Contratos
+## Testes com o Caliper e Jmeter
 
-Com a rede em execução, utilize o script `besu_smart_contracts` para automatizar o deploy e a interação com seus contratos.
+### Se quiser comparar o desempenho dos dois, recomendo executar primeriro o Caliper, pois ele gera o contrato que o Jmeter pode usar nos seus testes.
+Na pasta testes edite o "url" no networkconfig.json e coloque o IP da maquina.
+# Caliper
+```bash
+cd testes
+./run_caliper.sh <número de usuários> <número de repetições>
+```
+Por padrão o Caliper executa apenas uma vez o teste com 5 Workers
 
-1. Dê permissão de execução ao script:
-   ```bash
-   chmod +x besu_smart_contracts.sh
-   ```
-2. Execute o script para implantar e testar os contratos:
-   ```bash
-   ./besu_smart_contracts.sh
-   ```
+# Jmeter
+``` bash
+./run_jmeter.sh <número de usuários> <número de repetições>
+```
+Por padrão o Caliper executa apenas uma vez o teste com 5 Threads
+
+Ao final de execução de cada .sh é gerado uma pasta que contem arquivos de log e resultados dos testes
+Você pode modificar os arquivos de configuração do Caliper - 5_Users/caliper/simple/config.yaml - onde pode definir a quantidade de Workers e a Qantidade de de transações a serem realizadas. Assim como no jmeter - 5_users/jmeter/*.jmx - que é separado em 3 .jmx para cada operação (Open, Query e Transfer).
 
 ## Contribuição
 
@@ -68,7 +78,7 @@ Contribuições são bem-vindas! Siga os passos abaixo para contribuir:
 
 Se tiver dúvidas ou sugestões, entre em contato:
 
-- **Desenvolvedor:** Carlos Mikael Cardoso
+- **Desenvolvedor:** Carlos Mikael Cardoso Da Costa
 - **Email:** mikael.cardoso.costa13@gmail.com
 
 ## Licença
