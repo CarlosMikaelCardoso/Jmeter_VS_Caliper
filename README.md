@@ -1,103 +1,104 @@
-# Hyperledger Besu - Rede QBFT Permissional
+# Hyperledger Besu - Permissioned QBFT Network
 
-Bem-vindo ao projeto **Besu Production Docker**! Este repositório foi desenvolvido para facilitar a criação e o gerenciamento de uma rede blockchain permissionada com **Hyperledger Besu**, utilizando o mecanismo de consenso **QBFT**, ideal para ambientes de produção.
+Welcome to the **Besu Production Docker** project! This repository is designed to facilitate the creation and management of a permissioned blockchain network with **Hyperledger Besu**, using the **QBFT** consensus mechanism, ideal for production environments.
 
-## Funcionalidades
+## Features
 
-- **Setup Automatizado:** Scripts que automatizam a geração de chaves, arquivos de configuração e a estrutura de diretórios da rede.
-- **Orquestração com Docker:** Uso de Docker e Docker-Compose para subir e gerenciar os nós da rede de forma isolada e consistente.
-- **Rede Permissionada:** Configuração de uma rede privada onde apenas nós e contas autorizadas podem participar.
-- **Automação de Contratos:** Inclui scripts para compilar, implantar e testar smart contracts na rede.
+- **Automated Setup:** Scripts that automate the generation of keys, configuration files, and the network's directory structure.
+- **Orchestration with Docker:** Use of Docker and Docker-Compose to launch and manage the network nodes in an isolated and consistent manner.
+- **Permissioned Network:** Configuration of a private network where only authorized nodes and accounts can participate.
+- **Contract Automation:** Includes scripts to compile, deploy, and test smart contracts on the network.
 
-## Requisitos
+## Requirements
 
-Os requisitos são instalados automaticamente pelo script `setup_besu_networks.sh`, mas é importante garantir que você tenha os seguintes pré-requisitos (cURL, wget, tar):
+The requirements are installed automatically by the `setup_besu_networks.sh` script, but it is important to ensure you have the following prerequisites (cURL, wget, tar):
 
 - **Java JDK 17+**
 - **Besu v24.7.0+**
 - **Docker & Docker-Compose**
 - **cURL, wget, tar**
 
-## Instalação e Configuração
+## Installation and Setup
 
-Siga os passos abaixo para configurar o projeto em sua máquina:
+Follow the steps below to set up the project on your machine:
 
-1. Clone este repositório:
+1. Clone these repositories:
    ```bash
-   git clone https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git
-   git clone https://github.com/hyperledger-caliper/caliper-benchmarks.git
+   git clone [https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git](https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git)
+   git clone [https://github.com/hyperledger-caliper/caliper-benchmarks.git](https://github.com/hyperledger-caliper/caliper-benchmarks.git)
    cd caliper-benchmarks
    git checkout v0.6.0
    ```
-2. Execute o script de configuração da rede. Ele irá preparar todos os arquivos necessários para os nós.
+2. Execute the network setup script. It will prepare all the necessary files for the nodes.
    ```bash
    chmod +x setup_besu_networks.sh
    ./setup_besu_networks.sh
    ```
 
-## Testes com o Caliper e Jmeter
+## Testing with Caliper and JMeter
 
-### Se quiser comparar o desempenho dos dois, recomendo executar primeiro o Caliper, pois ele gera o contrato que o Jmeter pode usar nos seus testes.
-Na pasta testes edite o "url" no networkconfig.json e coloque o IP da maquina.
+### If you want to compare the performance of the two, it's recommended to run Caliper first, as it deploys the contract that JMeter will use for its tests.
+In the `testes` folder, edit the "url" in `networkconfig.json` and set the machine's IP address.
+
 # Caliper
 ```bash
 cd testes
-./run_caliper.sh <número de usuários> <número de repetições>
+./run_caliper.sh <number of users> <number of repetitions>
 ```
-Por padrão o Caliper executa apenas uma vez o teste com 5 Workers
+By default, Caliper runs the test once with 5 Workers.
 
-# Jmeter
-No Jmeter precisamos executar a API para que ele consiga realizar as operações
+# JMeter
+For JMeter, we need to run the API so it can perform the operations.
 
-``` bash
+```bash
 cd api-besu
-npm install # Instala as dependências para a API
-# Exporte as variáveis de ambiente necessárias para a configuração do Besu.
+npm install # Installs the API dependencies
+# Export the necessary environment variables for the Besu configuration.
 export DEPLOYER_PRIVATE_KEY="0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63"
-export CONTRACT_ADDRESS="<endereço do contrato>" # Esse endereço esta no /testes/contract_address.txt 
+export CONTRACT_ADDRESS="<contract_address>" # This address is located in /testes/contract_address.txt
 node api_load_balancer
 ```
-Em outro terminal
+In another terminal:
 
-``` bash
-./Jmeter_VS_Caliper/testes
-./run_jmeter.sh <número de usuários> <número de repetições>
+```bash
+cd Jmeter_VS_Caliper/testes
+./run_jmeter.sh <number of users> <number of repetitions>
 ```
-Por padrão o Caliper executa apenas uma vez o teste com 5 Threads
+By default, JMeter runs the test once with 5 Threads.
 
-Ao final de execução de cada .sh é gerado uma pasta que contem arquivos de log e resultados dos testes
-Você pode modificar os arquivos de configuração do Caliper - 5_Users/caliper/simple/config.yaml - onde pode definir a quantidade de Workers e a Qantidade de de transações a serem realizadas. Assim como no jmeter - 5_users/jmeter/*.jmx - que é separado em 3 .jmx para cada operação (Open, Query e Transfer).
+At the end of each `.sh` script execution, a folder is generated containing log files and test results.
+You can modify the Caliper configuration file - `5_Users/caliper/simple/config.yaml` - to define the number of Workers and the number of transactions to be performed. Similarly, for JMeter, you can modify the JMX files - `5_users/jmeter/*.jmx` - which are split into three separate files for each operation (Open, Query, and Transfer).
 
-## Contribuição
+## Contribution
 
-Contribuições são bem-vindas! Siga os passos abaixo para contribuir:
+Contributions are welcome! Follow the steps below to contribute:
 
-1. Faça um fork do repositório.
-2. Crie uma branch para sua feature/bugfix:
+1. Fork the repository.
+2. Create a branch for your feature/bugfix:
    ```bash
-   git checkout -b minha-feature
+   git checkout -b my-feature
    ```
-3. Faça commit das suas alterações:
+3. Commit your changes:
    ```bash
-   git commit -m "feat: Minha nova feature"
+   git commit -m "feat: My new feature"
    ```
-4. Envie para o repositório:
+4. Push to the branch:
    ```bash
-   git push origin minha-feature
+   git push origin my-feature
    ```
-5. Abra um Pull Request.
+5. Open a Pull Request.
 
-## Contato
+## Contact
 
-Se tiver dúvidas ou sugestões, entre em contato:
+If you have questions or suggestions, get in touch:
 
-- **Desenvolvedor:** Carlos Mikael Cardoso Da Costa
+- **Developer:** Carlos Mikael Cardoso Da Costa
 - **Email:** mikael.cardoso.costa13@gmail.com
 
-## Licença
+## License
 
-Este projeto está licenciado sob a [Licença MIT](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Obrigado por usar este projeto!
+Thank you for using this project!
