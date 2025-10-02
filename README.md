@@ -37,7 +37,7 @@ Siga os passos abaixo para configurar o projeto em sua máquina:
 
 ## Testes com o Caliper e Jmeter
 
-### Se quiser comparar o desempenho dos dois, recomendo executar primeriro o Caliper, pois ele gera o contrato que o Jmeter pode usar nos seus testes.
+### Se quiser comparar o desempenho dos dois, recomendo executar primeiro o Caliper, pois ele gera o contrato que o Jmeter pode usar nos seus testes.
 Na pasta testes edite o "url" no networkconfig.json e coloque o IP da maquina.
 # Caliper
 ```bash
