@@ -21,7 +21,7 @@ esac
 CALIPER_BENCHCONFIG="$(pwd)/${NUM_USERS}_Users/caliper/simple/config.yaml"
 CALIPER_NETWORKCONFIG="$(pwd)/networkconfig.json"
 CALIPER_WORKSPACE="."
-CONTRACT_ADDRESS_FILE="../besu-production-docker/testes/contract_address.txt"
+CONTRACT_ADDRESS_FILE="$(pwd)/contract_address.txt"
 TESTE_DIR="$(pwd)"
 CALIPER_RUNS_DIR="$TESTE_DIR/caliper_runs_${NUM_USERS}_users"
 
