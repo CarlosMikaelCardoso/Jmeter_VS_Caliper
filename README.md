@@ -24,8 +24,8 @@ Follow the steps below to set up the project on your machine:
 
 1. Clone these repositories:
    ```bash
-   git clone [https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git](https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git)
-   git clone [https://github.com/hyperledger-caliper/caliper-benchmarks.git](https://github.com/hyperledger-caliper/caliper-benchmarks.git)
+   git clone https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git
+   git clone https://github.com/hyperledger-caliper/caliper-benchmarks.git
    cd caliper-benchmarks
    git checkout v0.6.0
    ```
