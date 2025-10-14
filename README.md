@@ -29,10 +29,10 @@ Follow the steps below to set up the project on your machine:
    cd caliper-benchmarks
    git checkout v0.6.0
    ```
-1.2 Configuration of nodes:
-   ```bash
-   Go to ./Jmeter_VS_Caliper/update-docker-compose.py and change the 22 and 24 (<your IP>) by your IP address
-   ```
+   1.2 Configuration of nodes:
+      ```bash
+      Go to ./Jmeter_VS_Caliper/update-docker-compose.py and change the 22 and 24 (<your IP>) by your IP address
+      ```
 2. Execute the network setup script. It will prepare all the necessary files for the nodes.
    ```bash
    chmod +x setup_besu_networks.sh
