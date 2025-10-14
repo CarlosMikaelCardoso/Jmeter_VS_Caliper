@@ -66,7 +66,7 @@ In another terminal:
 
 ```bash
 cd Jmeter_VS_Caliper/testes
-./run_jmeter.sh <number of users> <number of repetitions>
+./run_jmeter_api.sh <number of users> <number of repetitions>
 ```
 By default, JMeter runs the test once with 5 Threads.
 
