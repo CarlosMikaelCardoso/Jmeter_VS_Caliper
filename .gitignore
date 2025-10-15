@@ -5,3 +5,13 @@ besu-24.7.0/
 
 # Ignorar o diretório específico do JDK
 jdk-21.0.7/
+
+# Ignorar diretorio Jmeter
+testes/apache-jmeter-5.6.3/
+
+# Ignora os modulos do Node.js
+api-besu/node_modules/
+
+# Ignora network files
+networkFiles/
+Permissioned-Network/
