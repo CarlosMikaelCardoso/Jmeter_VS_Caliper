@@ -1,17 +1,49 @@
-# Ignorar dependências e binários locais
-
-# Ignorar o diretório específico do Besu
-besu-24.7.0/
-
-# Ignorar o diretório específico do JDK
-jdk-21.0.7/
-
-# Ignorar diretorio Jmeter
-testes/apache-jmeter-5.6.3/
-
-# Ignora os modulos do Node.js
-api-besu/node_modules/
-
-# Ignora network files
-networkFiles/
+networkFiles/*
+*.tar.gz 
+besu-*/
+jdk-*/
+*.jfr
+genesis.json
 Permissioned-Network/
+node_modules
+.env
+
+# Hardhat files
+/cache
+/artifacts
+
+# TypeChain files
+/typechain
+/typechain-types
+
+# solidity-coverage files
+/coverage
+/coverage.json
+
+# Hardhat Ignition default folder for deployments against a local node
+ignition/deployments/chain-31337
+
+# Dependências do Node.js
+node_modules/
+
+# Ficheiros de log do npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ficheiros de ambiente
+.env
+.env.*
+!.env.example
+
+# Ficheiros gerados pela build
+dist
+build
+
+# Ficheiros e diretórios do JMeter
+apache-jmeter-*/
+*.jtl
+ethereum_accounts.csv
+jmeter_runs/
+jmeter_consolidated_resource_summary.log
+temp_eth_gen/
