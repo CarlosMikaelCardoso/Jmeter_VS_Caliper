@@ -35,7 +35,7 @@ Follow the steps below to set up the project on your machine:
       ```
 2. Execute the network setup script. It will prepare all the necessary files for the nodes.
    ```bash
-   chmod +x setup_besu_networks.sh
+   sudo chmod +x setup_besu_networks.sh
    ./setup_besu_networks.sh
    ```
 
@@ -47,6 +47,7 @@ In the `testes` folder, edit the "url" in `networkconfig.json` and set the machi
 # Caliper
 ```bash
 cd testes
+sudo chmod +x run_caliper.sh
 ./run_caliper.sh <number of users> <number of repetitions>
 ```
 By default, Caliper runs the test once with 5 Workers.
@@ -66,6 +67,7 @@ In another terminal:
 
 ```bash
 cd Jmeter_VS_Caliper/testes
+sudo chmod +x run_jmeter_api.sh
 ./run_jmeter_api.sh <number of users> <number of repetitions>
 ```
 By default, JMeter runs the test once with 5 Threads.
