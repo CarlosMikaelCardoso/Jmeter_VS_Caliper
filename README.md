@@ -32,6 +32,7 @@ Follow the steps below to set up the project on your machine:
    1.2 Configuration of nodes:
       ```bash
       Go to ./Jmeter_VS_Caliper/update-docker-compose.py and change the 22 and 24 (<your IP>) by your IP address
+      Now go to ./Jmeter_VS_Caliper/testes/networkconfig.json --> Line 6: Chande <your IP> to your IP address 
       ```
 2. Execute the network setup script. It will prepare all the necessary files for the nodes.
    ```bash
