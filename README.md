@@ -2,8 +2,6 @@
 
 Welcome to the **Besu Production Docker** project! This repository is designed to facilitate the creation and management of a permissioned blockchain network with **Hyperledger Besu**, using the **QBFT** consensus mechanism, ideal for production environments.
 
-## Features
-
 - **Automated Setup:** Scripts that automate the generation of keys, configuration files, and the network's directory structure.
 - **Orchestration with Docker:** Use of Docker and Docker-Compose to launch and manage the network nodes in an isolated and consistent manner.
 - **Permissioned Network:** Configuration of a private network where only authorized nodes and accounts can participate.
@@ -64,6 +62,10 @@ export DEPLOYER_PRIVATE_KEY="0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbce
 export CONTRACT_ADDRESS="<contract_address>" # This address is located in /testes/contract_address.txt
 node api_load_balancer
 ```
+
+## How API Works![arquiteture2](https://github.com/user-attachments/assets/2026c77a-cc63-466b-894e-99354ba572df)
+
+
 In another terminal:
 
 ```bash
