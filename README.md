@@ -6,8 +6,8 @@ The goal of this project is to provide a solution for realistic performance test
 
 - **Black-Box Testing via JMeter:** Utilizes Apache JMeter to simulate user traffic and measure performance from the application's perspective (Application-Centric) , focusing on metrics like transaction acceptance latency.
 - **Intelligent API:** The core of the solution is a custom API that includes:
-- **Atomic Nonce Management:** Ensures concurrent transactions do not fail.
-- **Dynamic Load Balancing:** Distributes the load evenly across Besu nodes to prevent bottlenecks.
+   - **Atomic Nonce Management:** Ensures concurrent transactions do not fail.
+   - **Dynamic Load Balancing:** Distributes the load evenly across Besu nodes to prevent bottlenecks.
 - **Decoupled Architecture:** The framework operates with separate VMs for JMeter and the Besu network (including the API and nodes) to simulate a production environment.
 - **Orchestration with Docker:** Uses Docker to manage the Besu network components, the API, Workload Modules, and metrics collection.
 - **Comparative Analysis:** The setup allows for a direct comparison between the light load of a protocol-centric test (Caliper) and the uniform stress load of an application-centric test (JMeter + API).
