@@ -11,7 +11,7 @@ The goal of this project is to provide a solution for realistic performance test
 - **Decoupled Architecture:** The framework operates with separate VMs for JMeter and the Besu network (including the API and nodes) to simulate a production environment.
 - **Orchestration with Docker:** Uses Docker to manage the Besu network components, the API, Workload Modules, and metrics collection.
 - **Comparative Analysis:** The setup allows for a direct comparison between the light load of a protocol-centric test (Caliper) and the uniform stress load of an application-centric test (JMeter + API).
-- 
+
 ## Requirements
 
 The requirements are installed automatically by the `setup_besu_networks.sh` script, but it is important to ensure you have the following prerequisites (cURL, wget, tar):
