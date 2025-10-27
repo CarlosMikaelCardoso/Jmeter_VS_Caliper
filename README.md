@@ -1,12 +1,17 @@
-# Hyperledger Besu - Permissioned QBFT Network
+# API-Driven Performance Testing Framework for Hyperledger Besu
 
-Welcome to the **Besu Production Docker** project! This repository is designed to facilitate the creation and management of a permissioned blockchain network with **Hyperledger Besu**, using the **QBFT** consensus mechanism, ideal for production environments.
+Welcome to the **Jmeter_VS_Caliper project!** This repository contains the framework presented in the paper "An API-Driven Framework for Performance Testing of Hyperledger Besu Blockchain Networks".
 
-- **Automated Setup:** Scripts that automate the generation of keys, configuration files, and the network's directory structure.
-- **Orchestration with Docker:** Use of Docker and Docker-Compose to launch and manage the network nodes in an isolated and consistent manner.
-- **Permissioned Network:** Configuration of a private network where only authorized nodes and accounts can participate.
-- **Contract Automation:** Includes scripts to compile, deploy, and test smart contracts on the network.
+The goal of this project is to provide a solution for realistic performance testing on **Hyperledger Besu networks** , bridging the gap between protocol-level benchmarks (like Hyperledger Caliper) and real-world application performance. The approach is API-centric, simulating how real applications interact with the blockchain.
 
+- **Black-Box Testing via JMeter:** Utilizes Apache JMeter to simulate user traffic and measure performance from the application's perspective (Application-Centric) , focusing on metrics like transaction acceptance latency.
+- **Intelligent API:** The core of the solution is a custom API that includes:
+- **Atomic Nonce Management:** Ensures concurrent transactions do not fail.
+- **Dynamic Load Balancing:** Distributes the load evenly across Besu nodes to prevent bottlenecks.
+- **Decoupled Architecture:** The framework operates with separate VMs for JMeter and the Besu network (including the API and nodes) to simulate a production environment.
+- **Orchestration with Docker:** Uses Docker to manage the Besu network components, the API, Workload Modules, and metrics collection.
+- **Comparative Analysis:** The setup allows for a direct comparison between the light load of a protocol-centric test (Caliper) and the uniform stress load of an application-centric test (JMeter + API).
+- 
 ## Requirements
 
 The requirements are installed automatically by the `setup_besu_networks.sh` script, but it is important to ensure you have the following prerequisites (cURL, wget, tar):
