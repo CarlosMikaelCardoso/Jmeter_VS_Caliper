@@ -11,6 +11,7 @@ The goal of this project is to provide a solution for realistic performance test
 - **Decoupled Architecture:** The framework operates with separate VMs for JMeter and the Besu network (including the API and nodes) to simulate a production environment.
 - **Orchestration with Docker:** Uses Docker to manage the Besu network components, the API, Workload Modules, and metrics collection.
 - **Comparative Analysis:** The setup allows for a direct comparison between the light load of a protocol-centric test (Caliper) and the uniform stress load of an application-centric test (JMeter + API).
+- **Operational System**: Ubuntu Server 24.04 LTS
 
 ## Requirements
 
