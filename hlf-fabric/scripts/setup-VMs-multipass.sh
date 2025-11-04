@@ -54,7 +54,7 @@ function installRequeriments() {
 function createCustomVMs() {
     for ((i=1; i<=NUMBER_OF_VMs; i++)); do
         echo "-> Criando vm${i} com ${CPU} CPUs, ${MEMORY}G de Memória, ${DISK}GB de Disco..."
-        multipass launch jammy --cpus "$CPU" --disk "$DISK"GB --name "vm${i}" --memory "$MEMORY"G --mount "${repository_dir}":/iliada/
+        multipass launch jammy --cpus "$CPU" --disk "$DISK"GB --name "vm${i}" --memory "$MEMORY"G --mount "${repository_dir}":/fabric/
     done
 
     echo ""
@@ -71,7 +71,7 @@ function saveVmIPs() {
       [[ -z "$IP_VM" ]] && exit 1
       echo "  - name: vm${i}"
       echo "    ip: ${IP_VM}"
-      echo "    dns: vm${i}.iliada"
+      echo "    dns: vm${i}.fabric"
     done
     echo "dns_ip: ${SERVER_IP}"
    } | tee "${start_dir}/config.yaml"  > /dev/null

@@ -1,0 +1,44 @@
+name: Minha Rede HLF Operator
+version: "2.0.0"
+caliper:
+  blockchain: fabric
+
+channels:
+  - channelName: demo
+    contracts:
+    - id: asset
+
+organizations:
+  - mspid: node2MSP
+    connectionProfile:
+      # Aponte para o arquivo na raiz do workspace
+      path: './caliper/node2-connection-profile.yaml'
+      discover: true
+      
+    identities:
+      certificates:
+        - name: 'node2-admin.node2-net'
+          clientPrivateKey:
+            pem: |-
+                    -----BEGIN PRIVATE KEY-----
+                    MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg0AfNr719dV/Xpfp1
+                    KiI/HsXtyQKBjr3Y1e50y8mTC8KhRANCAAS7EP+eTXfJaFbHmJdjY+HqHxZl7n+Q
+                    dS+7HESjdEqmTCyFFXPiJiPmcrzYpXto16Z3AH5vTYV9+lw3hhIPTr8e
+                    -----END PRIVATE KEY-----
+          clientSignedCert:
+            pem: |-
+                    -----BEGIN CERTIFICATE-----
+                    MIICUjCCAfmgAwIBAgIUIlSi6RtzZaNz7npPY53uTSqlKCAwCgYIKoZIzj0EAwIw
+                    ajELMAkGA1UEBhMCRVMxETAPBgNVBAcTCEFsaWNhbnRlMREwDwYDVQQJEwhBbGlj
+                    YW50ZTEZMBcGA1UEChMQS3VuZyBGdSBTb2Z0d2FyZTENMAsGA1UECxMEVGVjaDEL
+                    MAkGA1UEAxMCY2EwHhcNMjUxMTAzMTQ1MTQ3WhcNMjYxMTA0MTQ1NDAwWjAgMQ4w
+                    DAYDVQQLEwVhZG1pbjEOMAwGA1UEAxMFYWRtaW4wWTATBgcqhkjOPQIBBggqhkjO
+                    PQMBBwNCAAS7EP+eTXfJaFbHmJdjY+HqHxZl7n+QdS+7HESjdEqmTCyFFXPiJiPm
+                    crzYpXto16Z3AH5vTYV9+lw3hhIPTr8eo4HGMIHDMA4GA1UdDwEB/wQEAwIHgDAM
+                    BgNVHRMBAf8EAjAAMB0GA1UdDgQWBBSEdidgafimoQCrQ4teDdsJza9O9TArBgNV
+                    HSMEJDAigCAyZBR7vgSHHRdCoMsDU7h1K+kh0lOiObzQ3qwJeTMzxTBXBggqAwQF
+                    BgcIAQRLeyJhdHRycyI6eyJoZi5BZmZpbGlhdGlvbiI6IiIsImhmLkVucm9sbG1l
+                    bnRJRCI6ImFkbWluIiwiaGYuVHlwZSI6ImFkbWluIn19MAoGCCqGSM49BAMCA0cA
+                    MEQCIHI9iqH2kDGCceGkH0ph4IKVA4Sq7TtDeWY/pQGpCYk/AiAaVjS+WU8qJcZ0
+                    i12jKrj1lz4i5q2XmpIhTw4tg1Uamw==
+                    -----END CERTIFICATE-----

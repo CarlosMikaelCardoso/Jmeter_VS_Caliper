@@ -26,7 +26,7 @@ function patch_network_config() {
   yq e -i ".channels.demo.orderers = [\"node1-ord1.node1-net\", \"node1-ord2.node1-net\", \"node1-ord3.node1-net\"]" "$config_file"
 
   for i in {1..3}; do
-    local orderer_host="node1-ord${i}.node1-net.vm1.iliada"
+    local orderer_host="node1-ord${i}.node1-net.vm1.fabric"
     local orderer_name="node1-ord${i}.node1-net"
     local cert_path="org_certificates/node1/node1-ord${i}-tlscert.pem"
     local cert_pem=$(cat "${cert_path}" | sed 's/^[[:space:]]*//')

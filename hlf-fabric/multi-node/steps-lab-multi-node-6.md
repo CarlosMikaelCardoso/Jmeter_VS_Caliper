@@ -3,55 +3,22 @@
 ### Nesse passo a passo vamos apenas subir 2 nodes onde o node1 terá os Orderes e o node2 terá os Peers, CAs e a Chaincode.
 ### A ideia é que você possa subir mais nodes (Organizações) seguindo os passos do arquivo `steps-lab-multi-node-6-add-org.md`
 # Arquitetura de uma rede com 6 nodes
-![Minha foto de perfil](Arquitetura_multi_node.jpg)
+![Arquitetura](Arquitetura_multi_node.jpg)
 
 ## 1 - Clonar o Repositório do Projeto em todas as VMs
-    git clone --branch instalar-o-cenario-lab-multi-node-fabric-em-vms-da-rnp https://USUARIO_GIT_LAB:TOKEN_ACESSO@git.rnp.br/iliada-blockchain/m3/cenarios-bevel
+    git clone --branch fabric https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git
 
 ## 2 - Configurar o DNS Server
 ### Ir ao diretorio de trabalho do cenário escolhido
     
-    cd cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes || exit
-
-## Edit o arquivo ./config.yaml, colocando os IP's das VMs e o IP do DNS (IP_VM1)
-    Exemplo:
-        vms:
-            - name: vm1
-                ip: IP_VM1
-                dns: vm1.iliada
-            - name: vmx
-                ip: IP_VMx
-                dns: vmx.iliada
-        dns_ip: IP_DNS
-
-## Para conseguir o IP do DNS, verifica-se o gateway da VM1 com o comando:
-    ip route | grep default
-
-## Ele vai retornar algo como:
-    default via 192.168.122.1
-    
-## Com isso execute ´ip addr´ e procure o IP que esteja na mesma faixa do gateway, por exemplo:
-    192.168.122.XX
+    cd /Jmeter_VS_Caliper/hlf-fabric/multi-node || exit
 
 ### 2.1 - Configurando o DNS Server na VM1    
     ./setup-dns.sh config.yaml 
 
 ## 3 - Configurar o DNS e Microk8s em todas as VMs
 
-    ../../scripts/setup-microk8s.sh
-
-### 3.1 - Configurando a VM1 como dns fowarder
-    ./setup-dns-fowarder.sh config.yaml
-
-    Esse comando fará com que a VM1 encaminhe as requisições DNS das outras VMs para o IP do DNS que foi configurado no arquivo config.yaml
-
-### 3.2 - Execute apenas nos clientes! (Não inclui a VM1)
-### Lembre de sempre copiar o config.yaml entre as VMs
-    ./config-dns-client.sh config.yaml
-    
-### 3.3 - Verificando se o DNS está funcionando
-    ping vm1.iliada
-    ping vm2.iliada
+    ../scripts/setup-microk8s.sh
 
 ## 4 - Instalar o HLF Operator em todas as VMs
     ./setup-hlf-operator.sh config.yaml
@@ -62,7 +29,7 @@
 
 ## 5 - Instalar as organizações com suas CAs, Orderes e Peers na VM1
 
-    cd /iliada/lab-multi-node/fabric-hlf-6-nodes || exit  
+    cd /Jmeter_VS_Caliper/hlf-fabric/multi-node || exit  
     ./setup-node1.sh
 
 ### 5.1 - Instalar os Peers e Ca's nos clientes em outra VM
@@ -79,8 +46,8 @@
 
 ## 8 - Build chaincode em outra VM que não esteja o node2
     exit
-    cd ~/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes
-    ../../scripts/install-docker.sh
+    cd /Jmeter_VS_Caliper/hlf-fabric/multi-node
+    ../scripts/install-docker.sh
     ./build-chaincode.sh
 
 ### 8.2 - Extração de arquivo
@@ -92,7 +59,7 @@
 
 ## 9 - Install chaincode (Node2)
 ### A instalação da Chaincode é feita no Node2 então execute o .sh a seguir na VM que ela está.
-    cd /iliada/lab-multi-node/fabric-hlf-6-nodes || exit  
+    cd /fabric/lab-multi-node/fabric-hlf-6-nodes || exit  
     ./install-chaincode.sh
 
 ## 10 - Consultar o chaincode 
@@ -105,7 +72,7 @@
 
 ## Comandos uteis
 ### Criação de VMs
-    ../../scripts/setup-VMs-multipass.sh 2 3 3 10
+    ../scripts/setup-VMs-multipass.sh 1 3 3 10
 ### Ver os pods
     kubectl get pods -A
 ### Ver os serviços

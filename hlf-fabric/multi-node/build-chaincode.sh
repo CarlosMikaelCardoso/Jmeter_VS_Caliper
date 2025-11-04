@@ -18,7 +18,7 @@ start_dir=$(pwd)
 # function get_vm_ip() {
 #   local vm_name="$1"
 #   # Usa yq para extrair o IP do config.yaml
-#   yq e ".vms[] | select(.name == \"${vm_name}\") | .ip" /home/iliada/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes/config.yaml
+#   yq e ".vms[] | select(.name == \"${vm_name}\") | .ip" /home/fabric/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes/config.yaml
 # }
 
 function clone_repository(){

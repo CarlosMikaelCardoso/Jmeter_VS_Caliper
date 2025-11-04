@@ -4,12 +4,12 @@
 ![Minha foto de perfil](Arquitetura_multi_node.jpg)
 
 ## 1 - Clonar o Repositório do Projeto em todas as VMs
-    git clone --branch instalar-o-cenario-lab-multi-node-fabric-em-vms-da-rnp https://USUARIO_GIT_LAB:TOKEN_ACESSO@git.rnp.br/iliada-blockchain/m3/cenarios-bevel
+    git clone --branch fabric https://github.com/CarlosMikaelCardoso/Jmeter_VS_Caliper.git
 
 ## 2 - Configurar o DNS Server
 ### Ir ao diretorio de trabalho do cenário escolhido
     
-    cd cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes || exit
+    cd /Jmeter_VS_Caliper/hlf-fabric/multi-node || exit
 
 ## 3 - Adicionando uma nova organização na rede
     ./setup-nodeX.sh X config.yaml # X é o número do node que será criado

@@ -44,13 +44,13 @@ spec:
       namespace: ${ns}
   externalPeersToJoin: []
   orderers:
-    - url: grpcs://node1-ord1.node1-net.vm1.iliada:443
+    - url: grpcs://node1-ord1.node1-net.vm1.fabric:443
       certificate: |-
 ${ORDERER1_TLS_CERT}
-    - url: grpcs://node1-ord2.node1-net.vm1.iliada:443
+    - url: grpcs://node1-ord2.node1-net.vm1.fabric:443
       certificate: |-
 ${ORDERER2_TLS_CERT}
-    - url: grpcs://node1-ord3.node1-net.vm1.iliada:443
+    - url: grpcs://node1-ord3.node1-net.vm1.fabric:443
       certificate: |-
 ${ORDERER3_TLS_CERT}
 EOF

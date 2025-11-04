@@ -31,7 +31,7 @@ function get_vm_info() {
 
 #   echo "Copiando arquivos de identidade da organização ${org_name} para a VM local..."
 
-#   scp -r "${remote_user}@${remote_ip}:/home/iliada/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes/org_certificates/${org_name}" "./org_certificates/"
+#   scp -r "${remote_user}@${remote_ip}:/home/fabric/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes/org_certificates/${org_name}" "./org_certificates/"
 
 #   if [ $? -eq 0 ]; then
 #     echo "Transferência de arquivos de identidade para ${org_name} concluída com sucesso."
@@ -91,7 +91,7 @@ function certs_node1() {
 #   local remote_user="$2"
 #   local remote_ip=$(get_vm_info "vm${org_name: -1}" "ip")
 #   local certs_dir="./org_certificates/node1"
-#   local remote_certs_dir="/home/iliada/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes/org_certificates/node1"
+#   local remote_certs_dir="/home/fabric/cenarios-bevel/lab-multi-node/fabric-hlf-6-nodes/org_certificates/node1"
 
 #   echo "Copiando certificados dos Orderers da VM1 para a VM remota ${remote_ip}..."
 #   scp -r "${certs_dir}" "${remote_user}@${remote_ip}:${remote_certs_dir}"
@@ -116,7 +116,7 @@ function create_wallet_secrets_node1(){
 
   kubectl hlf ca register --namespace="${ns}" --name="${org_name}-ca" --user=admin --secret=adminpw \
     --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=node1MSP \
-    --ca-url="https://node1-ca.node1-net.vm1.iliada:443" || echo "AVISO: Falha ao registrar admin para ${org_name}, pode já estar registrado. Continuando..."
+    --ca-url="https://node1-ca.node1-net.vm1.fabric:443" || echo "AVISO: Falha ao registrar admin para ${org_name}, pode já estar registrado. Continuando..."
   sleep 30
 
   kubectl hlf identity create --name node1-admin-sign --namespace="${ns}" \
@@ -282,20 +282,20 @@ ${NODE2_TLS_ROOT_CERT}
           port: 7053
       mspID: node1MSP
       ordererEndpoints:
-        - ${org_name}-ord1.${ns_orderer}.vm1.iliada:443
-        - ${org_name}-ord2.${ns_orderer}.vm1.iliada:443
-        - ${org_name}-ord3.${ns_orderer}.vm1.iliada:443
+        - ${org_name}-ord1.${ns_orderer}.vm1.fabric:443
+        - ${org_name}-ord2.${ns_orderer}.vm1.fabric:443
+        - ${org_name}-ord3.${ns_orderer}.vm1.fabric:443
       orderersToJoin: []
   orderers:
-    - host: ${org_name}-ord1.${ns_orderer}.vm1.iliada
+    - host: ${org_name}-ord1.${ns_orderer}.vm1.fabric
       port: 443
       tlsCert: |-
 ${ORDERER1_TLS_CERT}
-    - host: ${org_name}-ord2.${ns_orderer}.vm1.iliada
+    - host: ${org_name}-ord2.${ns_orderer}.vm1.fabric
       port: 443
       tlsCert: |-
 ${ORDERER2_TLS_CERT}
-    - host: ${org_name}-ord3.${ns_orderer}.vm1.iliada
+    - host: ${org_name}-ord3.${ns_orderer}.vm1.fabric
       port: 443
       tlsCert: |-
 ${ORDERER3_TLS_CERT} 
@@ -313,7 +313,7 @@ EOF
 
 # --- FUNÇÃO PRINCIPAL QUE ORQUESTRA O FLUXO ---
 function main() {
-  # local remote_user="iliada"
+  # local remote_user="fabric"
   # local vm_peers=("node2" "node3") # Para testar com múltiplos nós, adicione-os aqui.
 
   # Etapa 1: Copia os certificados dos peers remotos para o nó local (VM1).
