@@ -11,7 +11,7 @@
 ## 2 - Configurar o DNS Server
 ### Ir ao diretorio de trabalho do cenário escolhido
     
-    cd /Jmeter_VS_Caliper/hlf-fabric/multi-node || exit
+    cd Jmeter_VS_Caliper/hlf-fabric/multi-node || exit
 
 ### 2.1 - Configurando o DNS Server na VM1    
     ./setup-dns.sh config.yaml 
@@ -29,7 +29,7 @@
 
 ## 5 - Instalar as organizações com suas CAs, Orderes e Peers na VM1
 
-    cd /Jmeter_VS_Caliper/hlf-fabric/multi-node || exit  
+    cd Jmeter_VS_Caliper/hlf-fabric/multi-node || exit  
     ./setup-node1.sh
 
 ### 5.1 - Instalar os Peers e Ca's nos clientes em outra VM

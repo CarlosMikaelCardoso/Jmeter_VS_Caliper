@@ -40,8 +40,7 @@ function install_node1(){
 
   sleep 10
   kubectl wait --namespace=${ns} --for=condition=ready --timeout=100s pod -l app=hlf-ca
-
-
+  sleep 10
   # test the CA  
   curl -vik https://node1-ca.node1-net.vm1.fabric:443/cainfo
 
@@ -82,6 +81,8 @@ function install_node1(){
 }
 
 function deleteAll() {
+  helm delete node1-ca -n node1-net --ignore-not-found
+  kubectl get pvc -n node1-net 
   kubectl delete fabricorderernodes.hlf.kungfusoftware.es --all-namespaces --all
   kubectl delete fabriccas.hlf.kungfusoftware.es --all-namespaces --all
   kubectl delete fabricidentities.hlf.kungfusoftware.es --all-namespaces --all

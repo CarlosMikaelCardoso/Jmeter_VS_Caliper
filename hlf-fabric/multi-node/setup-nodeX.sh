@@ -45,7 +45,7 @@ function install_nodeX(){
   # Create the certification authority
   kubectl hlf ca create --namespace=${ns} --image=$CA_IMAGE --version=$CA_VERSION --storage-class=$SC_NAME --capacity=1Gi --name=${org_name}-ca --enroll-id=enroll --enroll-pw=enrollpw --hosts=${org_name}-ca.${ns}.${DNS_SUFFIX} --istio-port=443
 
-  sleep 10
+  sleep 25
   kubectl wait --namespace=${ns} --for=condition=ready --timeout=200s pod -l app=hlf-ca
   
   # test the CA  
@@ -54,7 +54,7 @@ function install_nodeX(){
   kubectl hlf ca register --namespace=${ns} --name=${org_name}-ca --user=peer --secret=peerpw --type=peer --enroll-id enroll --enroll-secret=enrollpw --mspid ${org_name}MSP
 
   kubectl hlf peer create --namespace=${ns} --statedb=leveldb --image=$PEER_IMAGE --version=$PEER_VERSION --storage-class=$SC_NAME --enroll-id=peer --mspid=${org_name}MSP --enroll-pw=peerpw --capacity=4Gi --name=${org_name}-peer0 --ca-name=${org_name}-ca.${ns} --hosts=${org_name}-peer0.${ns}.${DNS_SUFFIX} --istio-port=443
-  sleep 10
+  sleep 25
   kubectl wait --namespace=${ns} --for=condition=ready --timeout=180s pod -l app=hlf-peer
 }
 

@@ -126,7 +126,7 @@ function create_wallet_secrets_node1(){
   kubectl hlf identity create --name node1-admin-tls --namespace="${ns}"  \
     --ca-name "${org_name}-ca" --ca-namespace "${ns}" \
     --ca tlsca --mspid node1MSP --enroll-id admin --enroll-secret adminpw
-  sleep 10
+  sleep 20
 
   # Cria o namespace para o node2 (removido o loop para os outros nós para simplificar o exemplo)
   kubectl create namespace node2-net --dry-run=client -o yaml | kubectl apply -f -
@@ -323,15 +323,15 @@ function main() {
 
   # Etapa 2: Cria os segredos e identidades do node1 e aplica os segredos dos peers.
   create_wallet_secrets_node1
-  sleep 10
+  sleep 20
   
   # Etapa 3: Obtém os certificados da CA e dos Orderers do node1.
   certs_node1
-  sleep 10
+  sleep 20
   
   # Etapa 4: Cria o canal principal.
   create_channel
-  sleep 10
+  sleep 20
 
   # Etapa 5: Copia os certificados dos Orderers do node1 para os peers remotos.
   # for node in "${vm_peers[@]}"; do
