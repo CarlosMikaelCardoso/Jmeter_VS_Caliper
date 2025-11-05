@@ -45,21 +45,17 @@ function install_nodeX(){
   # Create the certification authority
   kubectl hlf ca create --namespace=${ns} --image=$CA_IMAGE --version=$CA_VERSION --storage-class=$SC_NAME --capacity=1Gi --name=${org_name}-ca --enroll-id=enroll --enroll-pw=enrollpw --hosts=${org_name}-ca.${ns}.${DNS_SUFFIX} --istio-port=443
 
-  sleep 30
+  sleep 10
   kubectl wait --namespace=${ns} --for=condition=ready --timeout=200s pod -l app=hlf-ca
   
   # test the CA  
-  sleep 10
   curl -vik https://${org_name}-ca.${ns}.${DNS_SUFFIX}:443/cainfo
 
   kubectl hlf ca register --namespace=${ns} --name=${org_name}-ca --user=peer --secret=peerpw --type=peer --enroll-id enroll --enroll-secret=enrollpw --mspid ${org_name}MSP
 
-  sleep 20
   kubectl hlf peer create --namespace=${ns} --statedb=leveldb --image=$PEER_IMAGE --version=$PEER_VERSION --storage-class=$SC_NAME --enroll-id=peer --mspid=${org_name}MSP --enroll-pw=peerpw --capacity=4Gi --name=${org_name}-peer0 --ca-name=${org_name}-ca.${ns} --hosts=${org_name}-peer0.${ns}.${DNS_SUFFIX} --istio-port=443
-  sleep 20
+  sleep 10
   kubectl wait --namespace=${ns} --for=condition=ready --timeout=180s pod -l app=hlf-peer
-
-  sleep 20
 }
 
 function create_wallet_secrets_nodeX(){
@@ -72,7 +68,7 @@ function create_wallet_secrets_nodeX(){
   kubectl hlf ca register --name="${org_name}"-ca --namespace=${ns} --user=admin --secret=adminpw \
     --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=${msp_name} || echo "AVISO: Registro de admin para ${org_name} falhou, pode já existir."
 
-  sleep 15
+  sleep 5
 
   kubectl hlf identity create --name "${org_name}"-admin --namespace ${ns} \
     --ca-name "${org_name}-ca" --ca-namespace ${ns} \
@@ -96,7 +92,7 @@ function create_wallet_secrets_nodeX(){
 
   # --- Exportação do Secret ---
   echo "Exportando e limpando o segredo admin para ${org_name}..."
-  sleep 15
+  sleep 5
 
   local RAW_SECRET_YAML=$(kubectl get secret "${org_name}-admin" -n "${ns}" -o yaml)
   if [ $? -ne 0 ] || [ -z "${RAW_SECRET_YAML}" ]; then
@@ -114,7 +110,7 @@ function create_wallet_secrets_nodeX(){
 
   # --- Exportação da FabricIdentity ---
   echo "Exportando e limpando a FabricIdentity para ${org_name}..."
-  sleep 15
+  sleep 5
 
   local RAW_IDENTITY_YAML=$(kubectl get fabricidentities "${org_name}-admin" -n "${ns}" -o yaml)
   if [ $? -ne 0 ] || [ -z "${RAW_IDENTITY_YAML}" ]; then
@@ -184,7 +180,6 @@ function deleteAll() {
   else
     echo "NetworkConfig '${NODE_NAME}-cp' não encontrado. Pulando."
   fi
-  sleep 20
 }
 
 # Comentário sobre a modificação:
@@ -273,9 +268,9 @@ main() {
   # install_haproxy
   # sleep 10
   install_nodeX
-  sleep 20
+  sleep 10
   create_wallet_secrets_nodeX
-  sleep 20
+  sleep 10
   certs
 }
 

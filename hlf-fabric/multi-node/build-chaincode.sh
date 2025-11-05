@@ -32,6 +32,7 @@ function build_image() {
   sudo docker build -t "${CHAINCODE_IMAGE}" .
   
   echo "Salvando a imagem para um arquivo .tar.gz..."
+  echo "Esse processo pode levar algum tempo dependendo do tamanho da imagem."
   # Salva a imagem para ser transferida
   sudo docker save "${CHAINCODE_IMAGE}" | gzip > "${CHAINCODE_NAME}".tar.gz
   mv "${CHAINCODE_NAME}".tar.gz ${start_dir}/
