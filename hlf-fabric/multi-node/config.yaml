@@ -1,5 +1,0 @@
-vms: 
-  - name: vm1
-    ip: 10.126.1.249
-    dns: vm1.fabric
-dns_ip: 10.126.1.249

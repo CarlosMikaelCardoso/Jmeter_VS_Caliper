@@ -7,6 +7,8 @@ genesis.json
 Permissioned-Network/
 node_modules
 .env
+*.json
+*.id
 
 # Hardhat files
 /cache
@@ -30,6 +32,7 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
 # Ficheiros de ambiente
 .env
@@ -43,7 +46,8 @@ build
 # Ficheiros e diretórios do JMeter
 apache-jmeter-*/
 *.jtl
-ethereum_accounts.csv
+*.csv
+*.txt
 jmeter_runs/
 jmeter_consolidated_resource_summary.log
 temp_eth_gen/
