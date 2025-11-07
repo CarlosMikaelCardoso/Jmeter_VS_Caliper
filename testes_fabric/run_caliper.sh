@@ -59,22 +59,12 @@ function caliper_setup(){
             || echo "Falha ao executar 'caliper bind' — prosseguindo (pode causar erros posteriores)."
     fi
 
-    echo "Verificando se o plugin Prometheus para o Caliper já está instalado..."
-    if npm ls --depth=0 @hyperledger/caliper-prometheus > /dev/null 2>&1 \
-       || [ -d node_modules/@hyperledger/caliper-prometheus ]; then
-        echo "Plugin @hyperledger/caliper-prometheus já instalado. Pulando instalação."
-    else
-        echo "Instalando o plugin do Prometheus para o Caliper..."
-        attempt_cmd "npm install --only=prod @hyperledger/caliper-prometheus > /dev/null 2>&1" \
-            || echo "Falha ao instalar @hyperledger/caliper-prometheus — prosseguindo (pode causar erros posteriores)."
-    fi
-
     cd "${DIRETORIO_BECHMARKS}" || exit
     echo Iniciando o caliper...
     npx caliper launch manager --caliper-workspace ./ \
     --caliper-networkconfig fabric/test-network.yaml \
     --caliper-benchconfig simple/config.yaml \
-    --caliper-flow-only-test --caliper-fabric-gateway-enabled
+    --caliper-fabric-gateway-enabled
 }
 
 main() {
