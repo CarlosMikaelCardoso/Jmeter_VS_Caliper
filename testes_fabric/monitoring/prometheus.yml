@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 5s # Coleta dados a cada 15 segundos
+
+scrape_configs:
+  # Coleta métricas sobre o próprio Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Coleta métricas do cAdvisor (que expõe as métricas de todos os outros contêineres)
+  - job_name: 'cadvisor'
+    static_configs:
+      # 'cadvisor:8080' funciona porque eles estarão na mesma rede Docker
+      - targets: ['cadvisor:8080']

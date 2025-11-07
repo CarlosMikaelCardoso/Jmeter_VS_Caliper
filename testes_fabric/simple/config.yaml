@@ -1,0 +1,98 @@
+simpleArgs: &simple-args
+  initialMoney: 10000
+  moneyToTransfer: 100
+  numberOfAccounts: &number-of-accounts 1000
+
+test:
+  name: simple
+  description: >-
+    This is an example benchmark for Caliper, to test the backend DLT's
+    performance with simple account opening & querying transactions.
+  workers:
+    number: 5
+  rounds:
+    - label: open
+      description: >-
+        Test description for the opening of an account through the deployed
+        contract.
+      txNumber: *number-of-accounts
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 50
+      workload:
+        module: simple/open.js
+        arguments: *simple-args
+    - label: query
+      description: Test description for the query performance of the deployed contract.
+      txNumber: *number-of-accounts
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 100
+      workload:
+        module: simple/query.js
+        arguments: *simple-args
+    - label: transfer
+      description: Test description for transfering money between accounts.
+      txNumber: 50
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 5
+      workload:
+        module: simple/transfer.js
+        arguments:
+          << : *simple-args
+          money: 100
+
+monitors:
+  resource:
+  - module: prometheus
+    options:
+      # URL do seu servidor Prometheus (que você subiu no Passo 1)
+      url: "http://192.168.100.83:9090"
+      
+      # Intervalo em segundos que o Caliper vai consultar o Prometheus
+      interval: 5
+      
+      # Queries PromQL para extrair as métricas.
+      # Estamos filtrando pelos contêineres da sua rede Besu/Fabric
+      query:
+        # --- CPU ---
+        # Converte a taxa de uso de CPU (em segundos) para porcentagem de CPU
+        avg_cpu: >
+          sum(rate(container_cpu_usage_seconds_total{name=~"node.*|peer.*|orderer.*"}[1m])) by (name) * 100
+        
+        # --- Memória ---
+        avg_memory: >
+          sum(container_memory_usage_bytes{name=~"node.*|peer.*|orderer.*"}) by (name)
+
+        # --- Rede ---
+        avg_network_in: >
+          sum(rate(container_network_receive_bytes_total{name=~"node.*|peer.*|orderer.*"}[1m])) by (name)
+        avg_network_out: >
+          sum(rate(container_network_transmit_bytes_total{name=~"node.*|peer.*|orderer.*"}[1m])) by (name)
+          
+      # Mapeia os resultados da query para as colunas do Caliper
+      charting:
+        avg_cpu:
+          Contracts: 
+          - name
+          Value: avg_cpu
+          Metric: Avg. CPU (%)
+        avg_memory:
+          Contracts:
+          - name
+          Value: avg_memory
+          Metric: Avg. Memory (bytes)
+        avg_network_in:
+          Contracts:
+          - name
+          Value: avg_network_in
+          Metric: Avg. Network In (bytes/s)
+        avg_network_out:
+          Contracts:
+          - name
+          Value: avg_network_out
+          Metric: Avg. Network Out (bytes/s)

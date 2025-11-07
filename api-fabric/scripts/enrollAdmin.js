@@ -16,7 +16,7 @@ const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-profile.json
 // Caminho para o diretório MSP do admin da Org1
 const mspPath = path.resolve(
     __dirname,
-    '../../../Jmeter_VS_Caliper/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com'
+    '../../../Jmeter_VS_Caliper/testes_fabric/network_fabric/test-network/organizations/peerOrganizations/org1.example.com'
 );
 
 // Caminhos corretos para os arquivos do *Admin*

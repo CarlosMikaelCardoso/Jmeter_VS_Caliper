@@ -1,0 +1,31 @@
+version: '3.7'
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      # Monta o arquivo de configuração do Prometheus de dentro desta pasta
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=1d' # Retém dados por 1 dia
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      # Permissões necessárias para o cAdvisor ler as estatísticas do host
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg

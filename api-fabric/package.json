@@ -1,0 +1,22 @@
+{
+  "name": "fabric-api",
+  "version": "1.0.0",
+  "description": "API REST para interagir com o chaincode na rede Fabric (para JMeter)",
+  "main": "api.js",
+  "scripts": {
+    "start": "node api.js",
+    "enrollAdmin": "node scripts/enrollAdmin.js",
+    "clean": "node scripts/cleanLedger.js"
+  },
+  "keywords": [
+    "fabric",
+    "api",
+    "jmeter"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "fabric-network": "~2.2.18"
+  }
+}

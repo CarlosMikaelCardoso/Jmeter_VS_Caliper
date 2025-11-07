@@ -7,7 +7,6 @@ genesis.json
 Permissioned-Network/
 node_modules
 .env
-*.json
 *.id
 
 # Hardhat files
@@ -51,3 +50,9 @@ apache-jmeter-*/
 jmeter_runs/
 jmeter_consolidated_resource_summary.log
 temp_eth_gen/
+config/
+builders/
+bin/
+testes_fabric/chaincode_simple/simple/node
+testes_fabric/chaincode_simple/simple/go/vendor/
+testes_fabric/chaincode_simple/smallbank/

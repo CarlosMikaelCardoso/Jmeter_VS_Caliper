@@ -4,6 +4,9 @@ set -o nounset   # Aborta a execução se uma variável não definida for usada
 set -o pipefail  # Aborta se algum comando em um pipeline falhar
 set -x           # Modo de depuração: imprime cada comando antes de executá-lo
 
+DIRETORIO_REDE="${HOME}/Jmeter_VS_Caliper/testes_fabric/network_fabric"
+DIRETORIO_CHAINCODE="${HOME}/Jmeter_VS_Caliper/testes_fabric/chaincode_simple/simple/go"
+
 function install_dependencies(){
     # Instalação do git e curl
     sudo apt-get update
@@ -17,17 +20,23 @@ function install_dependencies(){
     sudo systemctl enable docker
     # Instalação do GO e JQ
     sudo apt-get install golang-go jq -y
+    # Instalação do Pandas e Matplotlib para Python3
+    sudo apt-get install python3-pip -y
+    pip3 install pandas matplotlib
 }
 
 function network_creation(){
     # Script para instalar o Hyperledger Fabric
-    curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh && \
-    chmod +x install-fabric.sh && \
-    ./install-fabric.sh docker samples binary --fabric-version 2.4.9 
-    cd fabric-samples/test-network || exit
-    git checkout v2.4.9
+    # curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh && \
+    # chmod +x install-fabric.sh && \
+    cd "$DIRETORIO_REDE" || exit
+    ./install-fabric.sh docker binary --fabric-version 2.4.9 
+    cd ./test-network || exit
     # Levantar a rede do Hyperledger Fabric
+    echo levantando a rede do Hyperledger Fabric
     ./network.sh up createChannel -c gercom -s couchdb
+    echo Subindo chaincode na rede do Hyperledger Fabric
+    ./network.sh deployCC -ccn simple -ccp "$DIRETORIO_CHAINCODE" -ccl go -c gercom
 }
 
 function cleanup(){
