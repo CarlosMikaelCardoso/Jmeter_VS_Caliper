@@ -14,7 +14,7 @@ function install_dependencies(){
     # Instalação do docker e docker-compose
     sudo apt-get install git curl docker-compose -y
     sudo systemctl start docker
-    sudo usermod -a -G docker $USER
+    sudo usermod -aG docker $USER
     docker --version
     docker-compose --version
     sudo systemctl enable docker

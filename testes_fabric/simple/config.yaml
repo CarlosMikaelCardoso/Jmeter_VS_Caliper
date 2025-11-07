@@ -46,13 +46,17 @@ test:
           << : *simple-args
           money: 100
 
-
 monitors:
   resource:
   - module: docker
     options:
-      url: "http://192.168.100.83:2375" # <--- ADICIONE ESTA LINHA
+      # Caminho CORRETO para o socket do Docker Desktop
+      socketPath: "/home/gercom/.docker/desktop/docker.sock"
       interval: 5
       cpuUsageNormalization: false
       containers:
-        - all
+        - "orderer.example.com"
+        - "peer0.org1.example.com"
+        - "peer0.org2.example.com"
+        - "couchdb0"
+        - "couchdb1"

@@ -2,75 +2,109 @@
 set -o errexit   # Aborta a execução se um comando falhar
 set -o nounset   # Aborta a execução se uma variável não definida for usada
 set -o pipefail  # Aborta se algum comando em um pipeline falhar
-set -x           # Modo de depuração: imprime cada comando antes de executá-lo
+set -x           # Modo de depuração
 
-DIRETORIO_BECHMARKS="${HOME}/Jmeter_VS_Caliper/testes_fabric"
+# --- Caminhos ---
+BASE_DIR="$(pwd)"
+NETWORK_DIR="${BASE_DIR}/network_fabric/test-network"
+CHAINCODE_DIR="${BASE_DIR}/chaincode_simple/simple/go"
+MONITOR_DIR="${NETWORK_DIR}/prometheus-grafana"
+BENCHMARK_DIR="${BASE_DIR}/simple" # Onde os 3 yamls estão
 
-function cleanup(){
-    echo "Limpando arquivos e diretórios de uma execução anterior..."
-    sudo rm -rf caliper-benchmarks 
+# --- Configurações da API ---
+MONITOR_API_URL="http://localhost:3002"
+RESULTS_DIR="${BASE_DIR}/caliper_fabric_reports"
+
+# --- Função de Limpeza ---
+cleanup() {
+    # echo "--- [1/5] Derrubando redes (Fabric e Monitoramento) ---"
+    # (cd "${NETWORK_DIR}" && ./network.sh down) || echo "Rede Fabric já estava parada."
+    # # Vamos derrubar também o Grafana/Prometheus para garantir um início limpo
+    # (cd "${MONITOR_DIR}" && docker-compose down) || echo "Monitores já estavam parados."
+    
+    # Limpa relatórios antigos
+    rm -rf "${RESULTS_DIR}"
+    mkdir -p "${RESULTS_DIR}"
     echo "Limpeza concluída."
 }
 
-function install_dependencies_caliper(){
-    sudo apt-get update
-    sudo apt-get install -y git npm
+# --- Função de Subir Rede ---
+setup_network() {
+    # echo "--- [2/5] Subindo rede Fabric (Isso pode demorar) ---"
+    # cd "${NETWORK_DIR}"
+    # ./network.sh up createChannel -c gercom -s couchdb
+    
+    # echo "--- [3/5] Fazendo deploy do Chaincode 'simple' ---"
+    # ./network.sh deployCC -ccn simple -ccp "${CHAINCODE_DIR}" -ccl go -c gercom
+    
+    # IMPORTANTE: A stack do Prometheus (que o Grafana usa) DEVE estar no ar
+    # para a sua API de monitoramento funcionar, mesmo que o Caliper não a use.
+    # Mas como sua API nova usa DOCKERODE, não precisamos do Prometheus.
+    # Vamos subir apenas o Grafana/Prometheus se o usuário quiser ver.
+    
+    # echo "--- [4/5] Subindo stack de Monitoramento (Prometheus/Grafana) ---"
+    # (cd "${MONITOR_DIR}" && docker-compose up -d)
+    # echo "Aguardando 10s para o Prometheus iniciar..."
+    # sleep 10
+    
+    echo "--- [4/5] Rede Pronta ---"
+    cd "${BASE_DIR}" # Voltar para a raiz de 'testes_fabric'
 }
 
-function caliper_setup(){
-    # git clone https://github.com/hyperledger/caliper-benchmarks
-    # cd caliper-benchmarks || exit
-    # Verifica se o caliper-cli já está instalado (via npx sem install ou em node_modules)
-    # Função auxiliar: tenta um comando (com silencioso), faz uma segunda tentativa se falhar,
-    # mas não permite que o script aborta por causa de 'set -o errexit'
-    attempt_cmd() {
-        local cmd="$*"
-        local rc=0
-        set +o errexit
-        eval "$cmd"
-        rc=$?
-        if [ $rc -ne 0 ]; then
-            echo "Aviso: comando falhou (rc=$rc). Tentando novamente..."
-            sleep 2
-            eval "$cmd"
-            rc=$?
-        fi
-        set -o errexit
-        return $rc
-    }
+# --- Função de Teste ---
+# Argumentos: 1.NomeDaRodada (ex: open) 2.ArquivoConfig (ex: config-open.yaml) 3.RunNumber (ex: 1)
+run_caliper_test() {
+    local ROUND_NAME=$1
+    local CONFIG_FILE=$2
+    local RUN_NUMBER=$3
+    local ROUND_LABEL_LOWER=$(echo "$ROUND_NAME" | tr '[:upper:]' '[:lower:]')
 
-    if npx --no-install caliper --version > /dev/null 2>&1 || [ -d node_modules/@hyperledger/caliper-cli ]; then
-        echo "Caliper CLI já instalado. Pulando instalação."
-    else
-        echo "Instalando @hyperledger/caliper-cli..."
-        attempt_cmd "npm install --only=prod @hyperledger/caliper-cli > /dev/null 2>&1" \
-            || echo "Falha ao instalar @hyperledger/caliper-cli — prosseguindo (pode causar erros posteriores)."
-    fi
+    echo "--- Iniciando Monitoramento para: ${ROUND_NAME} (Run ${RUN_NUMBER}) ---"
+    curl -s -X POST -H "Content-Type: application/json" \
+        -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": ${RUN_NUMBER}}" \
+        "${MONITOR_API_URL}/monitor/start"
 
-    # Verifica se o binding para Fabric já foi feito (várias possibilidades de nomes de pacote)
-    if npm ls --depth=0 @hyperledger/caliper-sut-fabric > /dev/null 2>&1 \
-       || npm ls --depth=0 @hyperledger/caliper-fabric > /dev/null 2>&1 \
-       || [ -d node_modules/@hyperledger/caliper-sut-fabric ] \
-       || [ -d node_modules/@hyperledger/caliper-fabric ]; then
-        echo "Caliper Fabric binding já presente. Pulando bind."
-    else
-        echo "Executando 'caliper bind' para fabric:2.4..."
-        attempt_cmd "npx caliper bind --caliper-bind-sut fabric:2.4 > /dev/null 2>&1" \
-            || echo "Falha ao executar 'caliper bind' — prosseguindo (pode causar erros posteriores)."
-    fi
-
-    cd "${DIRETORIO_BECHMARKS}" || exit
-    echo Iniciando o caliper...
-    npx caliper launch manager --caliper-workspace ./ \
-    --caliper-networkconfig fabric/test-network.yaml \
-    --caliper-benchconfig simple/config.yaml \
-    --caliper-fabric-gateway-enabled
+    echo "--- Executando Caliper para: ${ROUND_NAME} ---"
+    npx caliper launch manager \
+        --caliper-workspace ./ \
+        --caliper-networkconfig fabric/test-network.yaml \
+        --caliper-benchconfig "${BENCHMARK_DIR}/${CONFIG_FILE}" \
+        --caliper-fabric-gateway-enabled \
+        --caliper-report-path "${RESULTS_DIR}/report-${ROUND_LABEL_LOWER}.html"
+    
+    echo "--- Parando Monitoramento para: ${ROUND_NAME} (Run ${RUN_NUMBER}) ---"
+    curl -s -X POST -H "Content-Type: application/json" \
+        -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": ${RUN_NUMBER}}" \
+        "${MONITOR_API_URL}/monitor/stop"
+        
+    echo "--- Baixando Logs de Monitoramento para: ${ROUND_NAME} ---"
+    curl -s -o "${RESULTS_DIR}/docker_stats_${ROUND_LABEL_LOWER}_run_${RUN_NUMBER}.log" \
+        "${MONITOR_API_URL}/monitor/logs/${ROUND_NAME}/${RUN_NUMBER}"
+        
+    echo "--- Rodada ${ROUND_NAME} concluída ---"
 }
 
+
+# --- Função Principal ---
 main() {
+    # 1. Limpa tudo (incluindo o ledger sujo que causou as 1000 falhas)
     cleanup
-    install_dependencies_caliper
-    caliper_setup
+    
+    # 2. Sobe a rede Fabric
+    setup_network
+
+    echo "--- [5/5] Executando Benchmarks do Caliper em sequência ---"
+    echo "IMPORTANTE: Certifique-se que a API de Monitoramento (monitor_api.js) está rodando na porta ${MONITOR_API_URL}"
+    sleep 5 # Pausa para o usuário ler
+
+    # 3. Executa os testes um por um
+    run_caliper_test "Open" "config-open.yaml" 1
+    run_caliper_test "Query" "config-query.yaml" 1
+    run_caliper_test "Transfer" "config-transfer.yaml" 1
+
+    echo "--- Benchmarks concluídos! ---"
+    echo "Relatórios e logs de monitoramento salvos em: ${RESULTS_DIR}"
 }
 
+# Executa o script
 main "$@"
