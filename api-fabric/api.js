@@ -13,7 +13,7 @@ const QueryWorkload = require('./workloads/query.js');
 const TransferWorkload = require('./workloads/transfer.js');
 
 const app = express();
-const port = 3001;
+const port = 3000;
 app.use(express.json());
 
 // --- Configuração das Variáveis de Ambiente ---

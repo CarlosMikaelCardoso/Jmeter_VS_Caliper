@@ -6,7 +6,7 @@
 # 2 - Configurando a Rede do Hyperledger Fabric
 ```bash
     cd config
-    cp ../testes_fabric/network_fabric/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json config/connection-profile.json
+    cp ../../testes_fabric/network_fabric/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json connection-profile.json
 ```
 
 # 3 - Enrolando o Admin da Organização

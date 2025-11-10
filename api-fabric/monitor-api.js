@@ -10,19 +10,27 @@ const port = 3002; // Porta dedicada para o monitor
 app.use(express.json());
 
 // --- CORREÇÃO PARA DOCKER DESKTOP ---
-// O Docker Desktop armazena o socket no diretório $HOME do usuário
-// O 'process.env.USER' pegará "gercom" automaticamente
-const DOCKER_DESKTOP_SOCKET = `/home/${process.env.USER}/.docker/desktop/docker.sock`;
+console.log("Tentando conectar ao socket padrão do Docker Engine (/var/run/docker.sock)...");
 
-if (!fs.existsSync(DOCKER_DESKTOP_SOCKET)) {
-    console.error(`ERRO: Socket do Docker Desktop não encontrado em: ${DOCKER_DESKTOP_SOCKET}`);
-    console.error("Verifique se o Docker Desktop está rodando ou se o caminho do socket está correto.");
-    process.exit(1);
-}
+// Instancia o Docker. O 'dockerode' irá procurar automaticamente 
+// o socket em /var/run/docker.sock (padrão do Docker Engine) quando 
+// nenhum 'socketPath' é fornecido.
+const docker = new Docker();
 
-console.log(`Usando socket do Docker Desktop em: ${DOCKER_DESKTOP_SOCKET}`);
-// Conecta explicitamente ao socket do Docker Desktop
-const docker = new Docker({ socketPath: DOCKER_DESKTOP_SOCKET });
+// Adiciona uma verificação de conexão para garantir que o daemon está acessível
+// (Isso substitui o 'fs.existsSync(DOCKER_DESKTOP_SOCKET)' antigo)
+docker.info((err, info) => {
+    if (err) {
+        console.error("ERRO: Falha ao conectar ao socket do Docker (/var/run/docker.sock).");
+        console.error("Verifique se o daemon do Docker (dockerd) está rodando e se você tem permissão.");
+        console.error("Tente executar: sudo systemctl status docker");
+        console.error(`Detalhe do erro: ${err.message}`);
+        process.exit(1);
+    }
+    if(info) {
+         console.log("Conexão com o Docker Engine estabelecida com sucesso.");
+    }
+});
 // Lista de containers da rede Fabric para monitorar
 // ATENÇÃO: Se você adicionar a Org3, adicione 'peer0.org3.example.com' e 'couchdb2' aqui
 const DOCKER_CONTAINERS_TO_MONITOR = [

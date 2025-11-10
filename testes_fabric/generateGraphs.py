@@ -5,7 +5,9 @@ import sys
 import glob
 import re
 
-# Cores para os containers do Fabric (baseado nos nomes corrigidos do monitor-api.js)
+# Cores para os containers do Fabric (copiado do seu script Caliper)
+# Estes nomes (ex: peer0.org1) devem corresponder ao que o monitor-api.js
+# escreve no arquivo docker_stats_*.log
 NODE_COLORS = {
     'orderer': '#1f77b4',      # Azul
     'peer0.org1': '#ff7f0e',   # Laranja
@@ -17,46 +19,72 @@ NODE_COLORS = {
     'couchdb2': '#e377c2',     # Rosa
 }
 
-def parse_caliper_log(log_file, round_name):
+def parse_jmeter_jtl(jtl_file, round_name, run_number, backend_errors_df):
     """
-    Lê um ficheiro de log de performance (stdout) do Caliper e extrai a tabela de resultados.
+    Lê um ficheiro JTL (CSV) do JMeter, calcula as métricas de performance
+    e incorpora erros do backend (se houver).
     """
     try:
-        with open(log_file, 'r') as f:
-            content = f.read()
+        df = pd.read_csv(jtl_file)
     except Exception as e:
-        print(f"  -> Erro ao ler o ficheiro de log {log_file}: {e}")
+        print(f"  -> Erro ao ler o ficheiro JTL {jtl_file}: {e}")
         return None
 
-    performance_data = []
-    # Procura pela tabela de resultados de performance
-    perf_match = re.search(r'### Test result ###\s*.*?Name\s*\| Succ.*?\n(.*?)\n\+--[+\-]*--', content, re.S)
-    
-    if perf_match:
-        perf_table_str = perf_match.group(1)
-        perf_lines = [line.strip() for line in perf_table_str.strip().split('\n') if '|' in line and '------' not in line]
-        for line in perf_lines:
-            parts = [p.strip() for p in line.split('|') if p.strip()]
-            if len(parts) == 8: 
-                # Adiciona o nome da rodada (Open, Query, Transfer) e o label (parts[0])
-                performance_data.append([round_name] + parts)
-    
-    if not performance_data:
-        print(f"  -> Aviso: Tabela 'Test result' não encontrada em {os.path.basename(log_file)}")
+    if df.empty:
+        print(f"  -> Aviso: Ficheiro JTL {os.path.basename(jtl_file)} está vazio.")
         return None
-        
-    perf_df = pd.DataFrame(performance_data, columns=['Round', 'Name', 'Succ', 'Fail', 'Send Rate (TPS)', 'Max Latency (s)', 'Min Latency (s)', 'Avg Latency (s)', 'Throughput (TPS)'])
-    
-    # Converte colunas para numérico
-    for col in perf_df.columns[2:]: 
-        perf_df[col] = pd.to_numeric(perf_df[col], errors='coerce')
 
-    return perf_df
+    # 1. Calcular métricas de JMeter
+    jmeter_success = df['success'].sum()
+    jmeter_fail = len(df) - jmeter_success
+    total_samples = len(df)
+
+    # 2. Calcular métricas de latência (em segundos)
+    avg_latency_s = df['elapsed'].mean() / 1000.0
+    min_latency_s = df['elapsed'].min() / 1000.0
+    max_latency_s = df['elapsed'].max() / 1000.0
+    p99_latency_s = df['elapsed'].quantile(0.99) / 1000.0
+
+    # 3. Calcular Throughput (amostras / tempo total em segundos)
+    # Tempo total = (Timestamp final + duração da última req) - Timestamp inicial
+    start_time_ms = df['timeStamp'].min()
+    end_time_ms = (df['timeStamp'] + df['elapsed']).max()
+    duration_s = (end_time_ms - start_time_ms) / 1000.0
+    
+    throughput_tps = total_samples / duration_s if duration_s > 0 else 0
+
+    # 4. Incorporar erros do Backend
+    try:
+        backend_fail_count = backend_errors_df[
+            (backend_errors_df['round'] == round_name) & 
+            (backend_errors_df['run'] == run_number)
+        ]['count'].sum()
+    except Exception:
+        backend_fail_count = 0
+
+    # 5. Compilar resultados
+    # 'Succ' (Sucesso) é apenas o que o JMeter reportou como sucesso.
+    # 'Fail' (Falha) é a soma das falhas do JMeter + falhas do backend.
+    summary_data = {
+        'Round': round_name,
+        'Run': run_number,
+        'Succ': jmeter_success,
+        'JMeter_Fail': jmeter_fail,
+        'Backend_Fail': backend_fail_count,
+        'Fail': jmeter_fail + backend_fail_count,
+        'Avg Latency (s)': avg_latency_s,
+        'Min Latency (s)': min_latency_s,
+        'Max Latency (s)': max_latency_s,
+        'P99 Latency (s)': p99_latency_s,
+        'Throughput (TPS)': throughput_tps
+    }
+    return summary_data
+
 
 def analyze_docker_stats(stats_file):
     """
     Lê um ficheiro de log do Docker (docker_stats_*.log) e retorna um DataFrame.
-    Esta função espera um CSV COM cabeçalho, conforme gerado pelo monitor-api.js.
+    Esta função foi copiada do seu script generateGraphsCaliper.py.
     """
     try:
         # A API escreve um cabeçalho
@@ -80,6 +108,7 @@ def analyze_docker_stats(stats_file):
 def plot_summary_table_from_dict(summary_data, title, output_path):
     """
     Gera e guarda uma tabela com métricas de resumo consolidadas a partir de um dicionário.
+    Modificado para usar '_jmeter_' no nome do arquivo.
     """
     summary_df = pd.DataFrame(summary_data)
     
@@ -92,13 +121,14 @@ def plot_summary_table_from_dict(summary_data, title, output_path):
     table.scale(1.2, 1.5)
     plt.title(f'Resumo Consolidado - {title}', fontsize=18, y=0.95)
 
-    # Adicionado '_caliper_' ao nome do arquivo para evitar colisão
-    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_caliper_summary_table_{title.lower()}.png"), bbox_inches='tight', pad_inches=0.1)
+    # Adicionado '_jmeter_' ao nome do arquivo
+    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_jmeter_summary_table_{title.lower()}.png"), bbox_inches='tight', pad_inches=0.1)
     plt.close()
     
 def plot_resource_bar_charts(df, title, resource_name, unit, output_path):
     """
     Gera gráficos de barras para o uso médio e máximo de um recurso.
+    Modificado para usar '_jmeter_' no nome do arquivo.
     """
     if df.empty:
         print(f"  -> Aviso: DataFrame de recursos vazio para {title}, pulando gráficos de barras de {resource_name}.")
@@ -110,7 +140,6 @@ def plot_resource_bar_charts(df, title, resource_name, unit, output_path):
     # Garante que apenas os containers presentes nos dados sejam plotados
     valid_containers = [c for c in summary.index if c in NODE_COLORS]
     
-    # Se o summary não contiver nenhum container conhecido, saia
     if not valid_containers:
         print(f"  -> Aviso: Nenhum container conhecido (ex: peer0.org1) encontrado para gráficos de barras de {resource_name} em {title}.")
         return
@@ -125,8 +154,7 @@ def plot_resource_bar_charts(df, title, resource_name, unit, output_path):
     plt.xlabel('Nó')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.bar_label(bars, fmt='%.2f')
-    # Adicionado '_caliper_' ao nome do arquivo
-    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_caliper_avg_{resource_name}_usage_{title.lower()}.png"))
+    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_jmeter_avg_{resource_name}_usage_{title.lower()}.png"))
     plt.close()
 
     plt.figure(figsize=(10, 6))
@@ -136,13 +164,13 @@ def plot_resource_bar_charts(df, title, resource_name, unit, output_path):
     plt.xlabel('Nó')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.bar_label(bars, fmt='%.2f')
-    # Adicionado '_caliper_' ao nome do arquivo
-    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_caliper_max_{resource_name}_usage_{title.lower()}.png"))
+    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_jmeter_max_{resource_name}_usage_{title.lower()}.png"))
     plt.close()
 
 def plot_resource_line_chart(df, title, column, y_label, output_path):
     """
     Função para gerar gráficos de linha para Rede e Disco.
+    Modificado para usar '_jmeter_' no nome do arquivo.
     """
     if df.empty:
         print(f"  -> Aviso: DataFrame de recursos vazio para {title}, pulando gráfico de linha de {column}.")
@@ -150,7 +178,6 @@ def plot_resource_line_chart(df, title, column, y_label, output_path):
         
     plt.figure(figsize=(15, 7))
     
-    # Garante que apenas os containers conhecidos sejam plotados
     valid_containers = sorted([c for c in df['container'].unique() if c in NODE_COLORS])
     
     if not valid_containers:
@@ -170,93 +197,107 @@ def plot_resource_line_chart(df, title, column, y_label, output_path):
     handles, labels = plt.gca().get_legend_handles_labels()
     order = [labels.index(s) for s in valid_containers]
     plt.legend([handles[idx] for idx in order],[labels[idx] for idx in order])
-    # Adicionado '_caliper_' ao nome do arquivo
-    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_caliper_{column}_usage_{title.lower()}.png"))
+    plt.savefig(os.path.join(output_path, f"CONSOLIDATED_jmeter_{column}_usage_{title.lower()}.png"))
     plt.close()
 
 def main():
-    if len(sys.argv) < 3:
-        print("Uso: python generateGraphsCaliper.py <diretório_de_resultados> <numero_de_repeticoes>")
+    if len(sys.argv) < 2:
+        print("Uso: python generateGraphs.py <diretório_de_resultados_jmeter>")
         sys.exit(1)
 
     results_dir = sys.argv[1]
-    num_repetitions = int(sys.argv[2])
-    # As rodadas são definidas no run_caliper.sh
+    # As rodadas são definidas no run_jmeter_api.sh
     rounds = ["Open", "Query", "Transfer"]
     
-    print(f"\n--- Gerando gráficos consolidados para os resultados em: {results_dir} ---")
+    print(f"\n--- Gerando gráficos consolidados para os resultados JMeter em: {results_dir} ---")
 
-    all_perf_dfs = []
+    all_perf_data = []
     all_docker_dfs = []
+
+    # 1. Carregar erros do Backend
+    backend_errors_file = os.path.join(results_dir, 'backend_errors.log')
+    backend_errors_df = pd.DataFrame(columns=['round', 'run', 'count', 'details'])
+    if os.path.exists(backend_errors_file):
+        try:
+            backend_errors_df = pd.read_csv(backend_errors_file, names=['round', 'run', 'count', 'details'])
+            print(f"Ficheiro de erros do backend ({backend_errors_file}) carregado.")
+        except Exception as e:
+            print(f"  -> Aviso: Não foi possível ler {backend_errors_file}: {e}")
+
 
     for round_name in rounds:
         print(f"\n--- Processando Rodada: {round_name} ---")
         
-        # 1. Processar Logs de Performance (caliper_log_*.txt)
-        perf_files = glob.glob(os.path.join(results_dir, f"caliper_log_{round_name.lower()}_run_*.txt"))
-        if not perf_files:
-            print(f"Aviso: Nenhum ficheiro de log de performance (caliper_log_...) encontrado para '{round_name}'.")
+        # 2. Processar Logs de Performance (results_*.jtl)
+        jtl_files = glob.glob(os.path.join(results_dir, f"results_{round_name.lower()}_run_*.jtl"))
+        if not jtl_files:
+            print(f"Aviso: Nenhum ficheiro de log de performance (results_*.jtl) encontrado para '{round_name}'.")
         
-        for f in perf_files:
-            # Passa o NOME DA RODADA (Open, Query, Transfer) para o parser
-            perf_df = parse_caliper_log(f, round_name)
-            if perf_df is not None:
-                all_perf_dfs.append(perf_df)
+        for f in jtl_files:
+            # Extrai o número da execução (run) do nome do ficheiro
+            match = re.search(r'run_(\d+)\.jtl', f)
+            if not match:
+                print(f"  -> Aviso: Não foi possível extrair o 'run number' de {f}, pulando...")
+                continue
+            run_number = int(match.group(1))
+            
+            perf_summary = parse_jmeter_jtl(f, round_name, run_number, backend_errors_df)
+            if perf_summary is not None:
+                all_perf_data.append(perf_summary)
 
-        # 2. Processar Logs de Recursos (docker_stats_*.log)
+        # 3. Processar Logs de Recursos (docker_stats_*.log)
         stats_files = glob.glob(os.path.join(results_dir, f"docker_stats_{round_name.lower()}_run_*.log"))
         if not stats_files:
-            print(f"Aviso: Nenhum ficheiro de estatísticas do Docker (docker_stats_...) encontrado para '{round_name}'.")
+            print(f"Aviso: Nenhum ficheiro de estatísticas do Docker (docker_stats_*.log) encontrado para '{round_name}'.")
 
         for f in stats_files:
             docker_df = analyze_docker_stats(f)
             if docker_df is not None:
-                # Adiciona o nome da rodada para agrupar depois
                 docker_df['round'] = round_name 
                 all_docker_dfs.append(docker_df)
 
-    # 3. Consolidar e Plotar Performance
-    if all_perf_dfs:
-        consolidated_perf_df = pd.concat(all_perf_dfs, ignore_index=True)
+    # 4. Consolidar e Plotar Performance
+    if all_perf_data:
+        consolidated_perf_df = pd.DataFrame(all_perf_data)
 
-        # --- CORREÇÃO DE LÓGICA ---
         # Agrega os resultados de performance (média das médias das N execuções)
-        # Agrupamos por 'Round' (Open, Query, Transfer) que nós definimos, 
-        # em vez de 'Name' (label) que vem do log e pode estar errado.
         agg_rules = {
-            'Succ': 'sum', 'Fail': 'sum', 'Send Rate (TPS)': 'mean',
-            'Max Latency (s)': 'mean', 'Min Latency (s)': 'mean',
-            'Avg Latency (s)': 'mean', 'Throughput (TPS)': 'mean'
+            'Succ': 'sum', 'JMeter_Fail': 'sum', 'Backend_Fail': 'sum', 'Fail': 'sum',
+            'Avg Latency (s)': 'mean', 'Min Latency (s)': 'mean',
+            'Max Latency (s)': 'mean', 'P99 Latency (s)': 'mean',
+            'Throughput (TPS)': 'mean'
         }
-        final_perf_summary = consolidated_perf_df.groupby('Round').agg(agg_rules).reset_index()
-        # --- FIM DA CORREÇÃO ---
+        final_perf_summary = consolidated_perf_df.groupby('Round').agg(agg_rules).reset_index().set_index('Round')
+        # Reordena as rodadas
+        final_perf_summary = final_perf_summary.reindex(rounds)
 
-        print("\n--- Resumo de Performance Consolidado (Total de {} execuções) ---".format(num_repetitions))
-        print(final_perf_summary.to_string())
+        print("\n--- Resumo de Performance Consolidado (JMeter) ---")
+        print(final_perf_summary.to_string(float_format="%.2f"))
 
-        # Loop corrigido para usar a coluna 'Round'
-        for _, row in final_perf_summary.iterrows():
+        # Gera tabelas de resumo para cada rodada
+        for round_name, row in final_perf_summary.iterrows():
             summary_data = {
                 'Métricas': [
-                    'Total de Amostras', 'Sucesso', 'Falha', 
-                    'Latência Média (s)', 'Latência Mínima (s)', 'Latência Máxima (s)', 
+                    'Total de Amostras', 'Sucesso (JMeter)', 'Falha (JMeter)', 'Falha (Backend API)', 
+                    'Latência Média (s)', 'Latência P99 (s)', 'Latência Mínima (s)', 'Latência Máxima (s)', 
                     'Throughput Médio (TPS)'
                 ],
                 'Valor': [
                     f"{(row['Succ'] + row['Fail']):.0f}",
                     f"{row['Succ']:.0f}",
-                    f"{row['Fail']:.0f}",
-                    f"{row['Avg Latency (s)']:.2f}",
-                    f"{row['Min Latency (s)']:.2f}",
-                    f"{row['Max Latency (s)']:.2f}",
+                    f"{row['JMeter_Fail']:.0f}",
+                    f"{row['Backend_Fail']:.0f}",
+                    f"{row['Avg Latency (s)']:.3f}",
+                    f"{row['P99 Latency (s)']:.3f}",
+                    f"{row['Min Latency (s)']:.3f}",
+                    f"{row['Max Latency (s)']:.3f}",
                     f"{row['Throughput (TPS)']:.2f}"
                 ]
             }
-            # Usa o nome da 'Round' para o título e nome do arquivo
-            plot_summary_table_from_dict(summary_data, row['Round'].capitalize(), results_dir)
+            plot_summary_table_from_dict(summary_data, round_name.capitalize(), results_dir)
         print("Tabelas de resumo de performance geradas.")
 
-    # 4. Consolidar e Plotar Recursos
+    # 5. Consolidar e Plotar Recursos
     if all_docker_dfs:
         consolidated_docker_df = pd.concat(all_docker_dfs, ignore_index=True)
         
