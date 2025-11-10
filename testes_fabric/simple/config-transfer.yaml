@@ -4,18 +4,18 @@ simpleArgs: &simple-args
   numberOfAccounts: &number-of-accounts 1000
 
 test:
-  name: simple-query
-  description: Rodada de Query (Consulta de Contas)
+  name: simple-transfer # <-- CORRIGIDO
+  description: Rodada de Transfer (Transferência de Contas) # <-- CORRIGIDO
   workers:
     number: 1
   rounds:
-    - label: query
-      description: Teste de performance de consulta.
+    - label: transfer # <-- CORRIGIDO
+      description: Teste de performance de transferência. # <-- CORRIGIDO
       txNumber: *number-of-accounts
       rateControl:
         type: fixed-rate
         opts:
-          tps: 100
+          tps: 100 # Nota: 100 TPS para 1000 tx é um teste de 10s. O config original tinha tps: 5
       workload:
-        module: simple/query.js
+        module: simple/transfer.js
         arguments: *simple-args

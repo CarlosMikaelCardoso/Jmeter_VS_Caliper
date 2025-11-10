@@ -59,18 +59,27 @@ run_caliper_test() {
     local RUN_NUMBER=$3
     local ROUND_LABEL_LOWER=$(echo "$ROUND_NAME" | tr '[:upper:]' '[:lower:]')
 
+    # --- ADICIONADO: Define o caminho do log de performance ---
+    local CALIPER_PERF_LOG="${RESULTS_DIR}/caliper_log_${ROUND_LABEL_LOWER}_run_${RUN_NUMBER}.txt"
+
     echo "--- Iniciando Monitoramento para: ${ROUND_NAME} (Run ${RUN_NUMBER}) ---"
     curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": ${RUN_NUMBER}}" \
         "${MONITOR_API_URL}/monitor/start"
 
     echo "--- Executando Caliper para: ${ROUND_NAME} ---"
+    # --- ADICIONADO: Informa onde o log de performance será salvo ---
+    echo "--- Log de performance sendo salvo em: ${CALIPER_PERF_LOG} ---"
+    
+    # --- MODIFICADO: Adicionado redirecionamento de stdout/stderr para o arquivo de log ---
     npx caliper launch manager \
         --caliper-workspace ./ \
         --caliper-networkconfig fabric/test-network.yaml \
         --caliper-benchconfig "${BENCHMARK_DIR}/${CONFIG_FILE}" \
         --caliper-fabric-gateway-enabled \
-        --caliper-report-path "${RESULTS_DIR}/report-${ROUND_LABEL_LOWER}.html"
+        --caliper-report-path "${RESULTS_DIR}/report-${ROUND_LABEL_LOWER}.html" \
+        > "${CALIPER_PERF_LOG}" 2>&1
+    # --- FIM DA MODIFICAÇÃO ---
     
     echo "--- Parando Monitoramento para: ${ROUND_NAME} (Run ${RUN_NUMBER}) ---"
     curl -s -X POST -H "Content-Type: application/json" \
@@ -98,12 +107,21 @@ main() {
     sleep 5 # Pausa para o usuário ler
 
     # 3. Executa os testes um por um
-    run_caliper_test "Open" "config-open.yaml" 1
-    run_caliper_test "Query" "config-query.yaml" 1
-    run_caliper_test "Transfer" "config-transfer.yaml" 1
+    # (Assumindo 1 repetição, como no script original)
+    local RUN_NUMBER=1
+    run_caliper_test "Open" "config-open.yaml" ${RUN_NUMBER}
+    run_caliper_test "Query" "config-query.yaml" ${RUN_NUMBER}
+    run_caliper_test "Transfer" "config-transfer.yaml" ${RUN_NUMBER}
 
     echo "--- Benchmarks concluídos! ---"
     echo "Relatórios e logs de monitoramento salvos em: ${RESULTS_DIR}"
+    
+    # --- ADICIONADO: Chamada ao novo script de geração de gráficos ---
+    echo "--- Gerando gráficos consolidados dos resultados ---"
+    # Passa o diretório de resultados e o número de repetições (hardcoded como 1)
+    python3 "${BASE_DIR}/generateGraphsCaliper.py" "${RESULTS_DIR}" 1
+    echo "--- Gráficos gerados com sucesso! ---"
+    # --- FIM DA MODIFICAÇÃO ---
 }
 
 # Executa o script

@@ -8,21 +8,54 @@ DIRETORIO_REDE="${HOME}/Jmeter_VS_Caliper/testes_fabric/network_fabric"
 DIRETORIO_CHAINCODE="${HOME}/Jmeter_VS_Caliper/testes_fabric/chaincode_simple/simple/go"
 
 function install_dependencies(){
-    # Instalação do git e curl
+    # Instalação de dependências básicas
     sudo apt-get update
-    sudo apt-get install git curl -y
-    # Instalação do docker e docker-compose
-    sudo apt-get install git curl docker-compose -y
-    sudo systemctl start docker
-    sudo usermod -aG docker $USER
-    docker --version
-    docker-compose --version
-    sudo systemctl enable docker
-    # Instalação do GO e JQ
-    sudo apt-get install golang-go jq -y
-    # Instalação do Pandas e Matplotlib para Python3
-    sudo apt-get install python3-pip -y
-    pip3 install pandas matplotlib
+    sudo apt-get install -y git curl python3-pip jq golang-go ca-certificates gnupg lsb-release
+
+    # Instalação do Docker Engine e docker compose plugin caso não exista
+    if ! command -v docker >/dev/null 2>&1; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+          $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    else
+        echo "docker já instalado: $(docker --version || true)"
+    fi
+
+    # Tenta iniciar o daemon Docker system-wide; se falhar tenta iniciar Docker Desktop (user service)
+    sudo systemctl start docker 2>/dev/null || true
+    if docker info >/dev/null 2>&1; then
+        echo "Docker daemon ativo (system)."
+    else
+        # Tenta iniciar o serviço de usuário do Docker Desktop (quando instalado)
+        if systemctl --user start docker-desktop.service 2>/dev/null || systemctl --user start docker-desktop 2>/dev/null; then
+            echo "Iniciando Docker Desktop (user service)."
+            sleep 3
+        fi
+    fi
+
+    # Adiciona o usuário ao grupo docker se necessário e informa para re-login
+    if ! groups "$USER" | grep -q '\bdocker\b'; then
+        sudo usermod -aG docker "$USER"
+        echo "Usuário adicionado ao grupo 'docker'. Faça logout/login ou rode: newgrp docker"
+    fi
+
+    # Verifica conectividade com o daemon e avisa em caso de erro
+    if ! docker info >/dev/null 2>&1; then
+        echo "Aviso: não foi possível conectar ao daemon Docker;"
+        echo " - Caso use o Docker Engine: execute 'sudo systemctl start docker' e verifique 'sudo systemctl status docker'."
+        echo " - Caso use Docker Desktop: execute 'systemctl --user start docker-desktop' e verifique 'systemctl --user status docker-desktop'."
+        echo "Se o problema for permissões, verifique se seu usuário está no grupo 'docker' (logout/login necessário)."
+    fi
+
+    # Mostra versões (não falhar se os comandos não existirem)
+    docker --version || true
+    docker compose version || true
+
+    # Instala pacotes Python no diretório do usuário para evitar necessidade de sudo
+    pip3 install --user pandas matplotlib || true
 }
 
 function network_creation(){

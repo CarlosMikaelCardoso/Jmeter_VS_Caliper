@@ -99,8 +99,12 @@ function startMonitoring(runId, logStream) {
                     // Usaremos 0 se não for encontrado.
                     
                     // Formato: container,cpu,mem,net_rx,net_tx,disk_r,disk_w
-                    // O .py espera "peer0.org1" e não "peer0.org1.example.com"
-                    const shortName = containerName.split('.')[0]; 
+                    
+                    // --- CORREÇÃO DA LÓGICA DO NOME ---
+                    // Remove .example.com se existir, senão usa o nome como está
+                    const shortName = containerName.replace('.example.com', '');
+                    // --- FIM DA CORREÇÃO ---
+                    
                     const netRxKB = (netRx / 1024).toFixed(2);
                     const netTxKB = (netTx / 1024).toFixed(2);
                     const diskReadKB = (diskRead / 1024).toFixed(2);
