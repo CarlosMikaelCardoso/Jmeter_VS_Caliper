@@ -12,29 +12,7 @@ function install_dependencies(){
     sudo apt-get update
     sudo apt-get install -y git curl python3-pip jq golang-go ca-certificates gnupg lsb-release
 
-    # Instalação do Docker Engine e docker compose plugin caso não exista
-    if ! command -v docker >/dev/null 2>&1; then
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-        echo \
-          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-          $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-        sudo apt-get update
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    else
-        echo "docker já instalado: $(docker --version || true)"
-    fi
-
-    # Tenta iniciar o daemon Docker system-wide; se falhar tenta iniciar Docker Desktop (user service)
-    sudo systemctl start docker 2>/dev/null || true
-    if docker info >/dev/null 2>&1; then
-        echo "Docker daemon ativo (system)."
-    else
-        # Tenta iniciar o serviço de usuário do Docker Desktop (quando instalado)
-        if systemctl --user start docker-desktop.service 2>/dev/null || systemctl --user start docker-desktop 2>/dev/null; then
-            echo "Iniciando Docker Desktop (user service)."
-            sleep 3
-        fi
-    fi
+    sudo snap install docker 
 
     # Adiciona o usuário ao grupo docker se necessário e informa para re-login
     if ! groups "$USER" | grep -q '\bdocker\b'; then
