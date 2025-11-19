@@ -51,6 +51,7 @@ def parse_jmeter_jtl(jtl_file, round_name, run_number, backend_errors_df):
     end_time_ms = (df['timeStamp'] + df['elapsed']).max()
     duration_s = (end_time_ms - start_time_ms) / 1000.0
     
+    # Nota: Este throughput inicial é baseado no sucesso HTTP (Send Rate)
     throughput_tps = total_samples / duration_s if duration_s > 0 else 0
 
     # 4. Incorporar erros do Backend
@@ -272,29 +273,56 @@ def main():
         final_perf_summary = final_perf_summary.reindex(rounds)
 
         print("\n--- Resumo de Performance Consolidado (JMeter) ---")
+        # Imprime o resumo antes da correção final, para debug
         print(final_perf_summary.to_string(float_format="%.2f"))
 
-        # Gera tabelas de resumo para cada rodada
+        # Gera tabelas de resumo para cada rodada com CORREÇÃO DE TPS
         for round_name, row in final_perf_summary.iterrows():
+            
+            # --- CÁLCULO CORRIGIDO DO TPS REAL ---
+            # O 'Throughput Médio' original é o Send Rate (baseado em sucesso HTTP).
+            # O 'Sucesso' (row['Succ']) é o sucesso HTTP original.
+            # O 'Sucesso Real' é o Sucesso HTTP - Falhas Backend.
+            
+            sucesso_http = row['Succ']
+            falhas_backend = row['Backend_Fail']
+            sucesso_real = sucesso_http - falhas_backend
+            
+            # Calcula o fator de correção: (Sucesso Real / Sucesso HTTP)
+            if sucesso_http > 0:
+                fator_correcao = sucesso_real / sucesso_http
+            else:
+                fator_correcao = 0
+                
+            # Aplica o fator ao TPS médio original para obter o TPS Real (Write Throughput)
+            tps_send_rate = row['Throughput (TPS)']
+            tps_real_throughput = tps_send_rate * fator_correcao
+
+            # Atualiza também o número total de falhas para o relatório
+            total_falhas = row['JMeter_Fail'] + falhas_backend
+            total_amostras = row['Succ'] + row['JMeter_Fail'] # Total de requisições feitas
+
             summary_data = {
                 'Métricas': [
-                    'Total de Amostras', 'Sucesso (JMeter)', 'Falha (JMeter)', 'Falha (Backend API)', 
+                    'Total de Amostras', 'Sucesso (Confirmado)', 'Falha Total', 'Falha (Backend API)', 
                     'Latência Média (s)', 'Latência P99 (s)', 'Latência Mínima (s)', 'Latência Máxima (s)', 
-                    'Throughput Médio (TPS)'
+                    'Throughput Real (TPS)'
                 ],
                 'Valor': [
-                    f"{(row['Succ'] + row['Fail']):.0f}",
-                    f"{row['Succ']:.0f}",
-                    f"{row['JMeter_Fail']:.0f}",
-                    f"{row['Backend_Fail']:.0f}",
+                    f"{total_amostras:.0f}",
+                    f"{sucesso_real:.0f}",     # Valor corrigido
+                    f"{total_falhas:.0f}",     # Valor corrigido
+                    f"{falhas_backend:.0f}",
                     f"{row['Avg Latency (s)']:.3f}",
                     f"{row['P99 Latency (s)']:.3f}",
                     f"{row['Min Latency (s)']:.3f}",
                     f"{row['Max Latency (s)']:.3f}",
-                    f"{row['Throughput (TPS)']:.2f}"
+                    f"{tps_real_throughput:.2f}" # TPS Corrigido (Write Throughput)
                 ]
             }
             plot_summary_table_from_dict(summary_data, round_name.capitalize(), results_dir)
+            print(f"  -> Rodada {round_name}: TPS Send Rate={tps_send_rate:.2f}, TPS Write Throughput={tps_real_throughput:.2f} (Correção: {fator_correcao*100:.1f}%)")
+
         print("Tabelas de resumo de performance geradas.")
 
     # 5. Consolidar e Plotar Recursos
