@@ -35,6 +35,10 @@ docker.info((err, info) => {
 // ATENÇÃO: Se você adicionar a Org3, adicione 'peer0.org3.example.com' e 'couchdb2' aqui
 const DOCKER_CONTAINERS_TO_MONITOR = [
     "orderer.example.com",
+    "orderer2.example.com",
+    "orderer3.example.com",
+    "orderer4.example.com",
+    "orderer5.example.com",
     "peer0.org1.example.com",
     "peer0.org2.example.com",
     "couchdb0",

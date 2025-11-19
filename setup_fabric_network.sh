@@ -45,7 +45,7 @@ function network_creation(){
     cd ./test-network || exit
     # Levantar a rede do Hyperledger Fabric
     echo levantando a rede do Hyperledger Fabric
-    ./network.sh up createChannel -c gercom -s couchdb
+    ./network.sh up createChannel -c gercom -s couchdb -o 5
     echo Subindo chaincode na rede do Hyperledger Fabric
     ./network.sh deployCC -ccn simple -ccp "$DIRETORIO_CHAINCODE" -ccl go -c gercom
 }

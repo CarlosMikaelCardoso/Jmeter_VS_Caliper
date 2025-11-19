@@ -8,6 +8,10 @@ import re
 # Cores para os containers do Fabric (baseado nos nomes corrigidos do monitor-api.js)
 NODE_COLORS = {
     'orderer': '#1f77b4',      # Azul
+    'orderer2': '#17becf',     # Ciano
+    'orderer3': '#bcbd22',     # Amarelo
+    'orderer4': '#7f7f7f',     # Cinza
+    'orderer5': '#ff9896',     # Salmão
     'peer0.org1': '#ff7f0e',   # Laranja
     'peer0.org2': '#2ca02c',   # Verde
     'couchdb0': '#d62728',     # Vermelho

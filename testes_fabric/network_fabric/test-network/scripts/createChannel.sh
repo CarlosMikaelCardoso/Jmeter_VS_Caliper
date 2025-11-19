@@ -8,6 +8,8 @@ CHANNEL_NAME="$1"
 DELAY="$2"
 MAX_RETRY="$3"
 VERBOSE="$4"
+ORDERER_COUNT="$5"
+: ${ORDERER_COUNT:="1"}
 : ${CHANNEL_NAME:="mychannel"}
 : ${DELAY:="3"}
 : ${MAX_RETRY:="5"}
@@ -34,21 +36,42 @@ createChannelGenesisBlock() {
 }
 
 createChannel() {
-	setGlobals 1
-	# Poll in case the raft leader is not set yet
-	local rc=1
-	local COUNTER=1
-	while [ $rc -ne 0 -a $COUNTER -lt $MAX_RETRY ] ; do
-		sleep $DELAY
-		set -x
-		osnadmin channel join --channelID $CHANNEL_NAME --config-block ./channel-artifacts/${CHANNEL_NAME}.block -o localhost:7053 --ca-file "$ORDERER_CA" --client-cert "$ORDERER_ADMIN_TLS_SIGN_CERT" --client-key "$ORDERER_ADMIN_TLS_PRIVATE_KEY" >&log.txt
-		res=$?
-		{ set +x; } 2>/dev/null
-		let rc=$res
-		COUNTER=$(expr $COUNTER + 1)
-	done
-	cat log.txt
-	verifyResult $res "Channel creation failed"
+    setGlobals 1
+    
+    local rc=1
+    local COUNTER=1
+    while [ $rc -ne 0 -a $COUNTER -lt $MAX_RETRY ] ; do
+        sleep $DELAY
+        set -x
+        
+        # Loop para fazer join em TODOS os orderers
+        local base_admin_port=7053
+        for (( i=1; i<=$ORDERER_COUNT; i++ )); do
+            let port=$base_admin_port+10*\($i-1\)
+            
+            infoln "Joining Orderer $i on port $port to channel..."
+            
+            # Nota: Estamos reusando o certificado do orderer1 para autenticação admin 
+            # (funciona pois todos são da mesma organização OrdererOrg no test-network)
+            osnadmin channel join --channelID $CHANNEL_NAME \
+                --config-block ./channel-artifacts/${CHANNEL_NAME}.block \
+                -o localhost:$port \
+                --ca-file "$ORDERER_CA" \
+                --client-cert "$ORDERER_ADMIN_TLS_SIGN_CERT" \
+                --client-key "$ORDERER_ADMIN_TLS_PRIVATE_KEY" >&log.txt
+            
+            res=$?
+            if [ $res -ne 0 ]; then
+                break # Se falhar em um, tenta de novo no loop principal
+            fi
+        done
+        
+        { set +x; } 2>/dev/null
+        let rc=$res
+        COUNTER=$(expr $COUNTER + 1)
+    done
+    cat log.txt
+    verifyResult $res "Channel creation failed"
 }
 
 # joinChannel ORG

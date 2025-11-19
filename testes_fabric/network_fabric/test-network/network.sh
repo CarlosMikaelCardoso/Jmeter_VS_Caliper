@@ -245,6 +245,8 @@ function createOrgs() {
 function networkUp() {
   checkPrereqs
 
+  createOrdererConfig
+
   # generate artifacts if they don't exist
   if [ ! -d "organizations/peerOrganizations" ]; then
     createOrgs
@@ -252,8 +254,15 @@ function networkUp() {
 
   COMPOSE_FILES="-f compose/${COMPOSE_FILE_BASE} -f compose/${CONTAINER_CLI}/${CONTAINER_CLI}-${COMPOSE_FILE_BASE}"
 
+  # --- CORREÇÃO: TRECHO REINSERIDO AQUI ---
   if [ "${DATABASE}" == "couchdb" ]; then
     COMPOSE_FILES="${COMPOSE_FILES} -f compose/${COMPOSE_FILE_COUCH} -f compose/${CONTAINER_CLI}/${CONTAINER_CLI}-${COMPOSE_FILE_COUCH}"
+  fi
+  # ----------------------------------------
+
+  # ADICIONAR O ARQUIVO GERADO SE HOUVER MAIS DE 1 ORDERER
+  if [ $ORDERER_COUNT -gt 1 ]; then
+    COMPOSE_FILES="${COMPOSE_FILES} -f compose/compose-orderers-dynamic.yaml"
   fi
 
   DOCKER_SOCK="${DOCKER_SOCK}" ${CONTAINER_CLI_COMPOSE} ${COMPOSE_FILES} up -d 2>&1
@@ -262,6 +271,271 @@ function networkUp() {
   if [ $? -ne 0 ]; then
     fatalln "Unable to start network"
   fi
+}
+
+createOrdererConfig() {
+  infoln "Gerando configuração para $ORDERER_COUNT orderers..."
+
+  # 1. Gerar crypto-config-orderer.yaml dinâmico
+  rm -f organizations/cryptogen/crypto-config-orderer.yaml
+  {
+    echo "OrdererOrgs:"
+    echo "  - Name: Orderer"
+    echo "    Domain: example.com"
+    echo "    EnableNodeOUs: true"
+    echo "    Specs:"
+    for (( i=1; i<=$ORDERER_COUNT; i++ )); do
+      if [ $i -eq 1 ]; then
+        echo "      - Hostname: orderer"
+      else
+        echo "      - Hostname: orderer$i"
+      fi
+      echo "        SANS:"
+      echo "          - localhost"
+    done
+  } > organizations/cryptogen/crypto-config-orderer.yaml
+
+  # 2. Gerar docker-compose-orderers.yaml dinâmico
+  # Isso cria um arquivo extra que será somado ao docker-compose principal
+  rm -f compose/compose-orderers-dynamic.yaml
+  {
+    echo "version: '3.7'"
+    echo "networks:"
+    echo "  test:"
+    echo "    name: fabric_test"
+    echo "services:"
+    
+    # Loop para criar serviços (começando do 2, pois o 1 já está no base, ou reescrevemos todos)
+    # Para simplificar, vamos assumir que o orderer1 está no compose-test-net.yaml
+    # e aqui geramos do 2 em diante.
+    
+    base_port=7050
+    admin_port=7053
+    ops_port=9443
+    
+    for (( i=2; i<=$ORDERER_COUNT; i++ )); do
+        # Incrementa portas em 10 para cada novo orderer para evitar conflito
+        # Ex: Orderer2 -> 7060, 7063
+        let p_listen=$base_port+10*\($i-1\)
+        let p_admin=$admin_port+10*\($i-1\)
+        let p_ops=$ops_port+10*\($i-1\)
+        
+        echo "  orderer$i.example.com:"
+        echo "    container_name: orderer$i.example.com"
+        echo "    image: hyperledger/fabric-orderer:latest"
+        echo "    labels:"
+        echo "      service: hyperledger-fabric"
+        echo "    environment:"
+        echo "      - FABRIC_LOGGING_SPEC=INFO"
+        echo "      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0"
+        echo "      - ORDERER_GENERAL_LISTENPORT=$p_listen"
+        echo "      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP"
+        echo "      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp"
+        echo "      - ORDERER_GENERAL_TLS_ENABLED=true"
+        echo "      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key"
+        echo "      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt"
+        echo "      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]"
+        echo "      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt"
+        echo "      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key"
+        echo "      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]"
+        echo "      - ORDERER_GENERAL_BOOTSTRAPMETHOD=none"
+        echo "      - ORDERER_CHANNELPARTICIPATION_ENABLED=true"
+        echo "      - ORDERER_ADMIN_TLS_ENABLED=true"
+        echo "      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt"
+        echo "      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key"
+        echo "      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]"
+        echo "      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]"
+        echo "      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:$p_admin"
+        echo "      - ORDERER_OPERATIONS_LISTENADDRESS=orderer$i.example.com:$p_ops"
+        echo "      - ORDERER_METRICS_PROVIDER=prometheus"
+        echo "    working_dir: /root"
+        echo "    command: orderer"
+        echo "    volumes:"
+        echo "        - ../organizations/ordererOrganizations/example.com/orderers/orderer$i.example.com/msp:/var/hyperledger/orderer/msp"
+        echo "        - ../organizations/ordererOrganizations/example.com/orderers/orderer$i.example.com/tls/:/var/hyperledger/orderer/tls"
+        echo "        - orderer$i.example.com:/var/hyperledger/production/orderer"
+        echo "    ports:"
+        echo "      - $p_listen:$p_listen"
+        echo "      - $p_admin:$p_admin"
+        echo "      - $p_ops:$p_ops"
+        echo "    networks:"
+        echo "      - test"
+    done
+    
+    # Volumes no final
+    echo "volumes:"
+    for (( i=2; i<=$ORDERER_COUNT; i++ )); do
+        echo "  orderer$i.example.com:"
+    done
+  } > compose/compose-orderers-dynamic.yaml
+
+  # 3. Atualizar configtx.yaml (apenas a seção de Orderer)
+  # Usamos sed para substituir os endereços e consenters padrão
+  # Nota: Esta é uma substituição simples, para produção usaríamos um template mais robusto.
+  
+  # Primeiro, restauramos o original para garantir limpeza
+  cp configtx/configtx.yaml configtx/configtx.yaml.bak
+  
+  # Construir string de endereços e consenters
+  CONSENTERS=""
+  ADDRESSES=""
+  base_port=7050
+  
+  for (( i=1; i<=$ORDERER_COUNT; i++ )); do
+      let p_listen=$base_port+10*\($i-1\)
+      if [ $i -eq 1 ]; then
+          HOST="orderer.example.com"
+      else
+          HOST="orderer$i.example.com"
+      fi
+      
+      # Adiciona à lista de Addresses
+      if [ -z "$ADDRESSES" ]; then ADDRESSES="        - $HOST:$p_listen"; else ADDRESSES="${ADDRESSES}\n        - $HOST:$p_listen"; fi
+      
+      # Adiciona à lista de Consenters (Raft)
+      CONSENTERS="${CONSENTERS}\n        - Host: $HOST\n          Port: $p_listen\n          ClientTLSCert: ../organizations/ordererOrganizations/example.com/orderers/$HOST/tls/server.crt\n          ServerTLSCert: ../organizations/ordererOrganizations/example.com/orderers/$HOST/tls/server.crt"
+  done
+
+  # Criar novo configtx dinâmico
+  cat > configtx/configtx.yaml <<EOF
+# Config gerada dinamicamente por network.sh
+Organizations:
+    - &OrdererOrg
+        Name: OrdererOrg
+        ID: OrdererMSP
+        MSPDir: ../organizations/ordererOrganizations/example.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('OrdererMSP.admin')"
+    - &Org1
+        Name: Org1MSP
+        ID: Org1MSP
+        MSPDir: ../organizations/peerOrganizations/org1.example.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('Org1MSP.admin', 'Org1MSP.peer', 'Org1MSP.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('Org1MSP.admin', 'Org1MSP.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('Org1MSP.admin')"
+            Endorsement:
+                Type: Signature
+                Rule: "OR('Org1MSP.peer')"
+    - &Org2
+        Name: Org2MSP
+        ID: Org2MSP
+        MSPDir: ../organizations/peerOrganizations/org2.example.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('Org2MSP.admin', 'Org2MSP.peer', 'Org2MSP.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('Org2MSP.admin', 'Org2MSP.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('Org2MSP.admin')"
+            Endorsement:
+                Type: Signature
+                Rule: "OR('Org2MSP.peer')"
+
+Capabilities:
+    Channel: &ChannelCapabilities
+        V2_0: true
+    Orderer: &OrdererCapabilities
+        V2_0: true
+    Application: &ApplicationCapabilities
+        V2_0: true
+
+Application: &ApplicationDefaults
+    Organizations:
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        LifecycleEndorsement:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Endorsement"
+        Endorsement:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Endorsement"
+    Capabilities:
+        <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+    OrdererType: etcdraft
+    Addresses:
+$(echo -e "$ADDRESSES")
+
+    EtcdRaft:
+        Consenters:
+$(echo -e "$CONSENTERS")
+
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    Organizations:
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        BlockValidation:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+
+Channel: &ChannelDefaults
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+    Capabilities:
+        <<: *ChannelCapabilities
+
+Profiles:
+    TwoOrgsApplicationGenesis:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - *OrdererOrg
+            Capabilities: *OrdererCapabilities
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *Org1
+                - *Org2
+            Capabilities: *ApplicationCapabilities
+EOF
 }
 
 # call the script to create the channel, join the peers of org1 and org2,
@@ -292,9 +566,8 @@ function createChannel() {
 
   # now run the script that creates a channel. This script uses configtxgen once
   # to create the channel creation transaction and the anchor peer updates.
-  scripts/createChannel.sh $CHANNEL_NAME $CLI_DELAY $MAX_RETRY $VERBOSE
+  scripts/createChannel.sh $CHANNEL_NAME $CLI_DELAY $MAX_RETRY $VERBOSE $ORDERER_COUNT
 }
-
 
 ## Call the script to deploy a chaincode to the channel
 function deployCC() {
@@ -322,6 +595,12 @@ function networkDown() {
   COMPOSE_CA_FILES="-f compose/${COMPOSE_FILE_CA} -f compose/${CONTAINER_CLI}/${CONTAINER_CLI}-${COMPOSE_FILE_CA}"
   COMPOSE_FILES="${COMPOSE_BASE_FILES} ${COMPOSE_COUCH_FILES} ${COMPOSE_CA_FILES}"
 
+  # --- MELHORIA 1: Incluir o compose dinâmico dos Orderers no Down ---
+  if [ -f "compose/compose-orderers-dynamic.yaml" ]; then
+    COMPOSE_FILES="${COMPOSE_FILES} -f compose/compose-orderers-dynamic.yaml"
+  fi
+  # -------------------------------------------------------------------
+
   # stop org3 containers also in addition to org1 and org2, in case we were running sample to add org3
   COMPOSE_ORG3_BASE_FILES="-f addOrg3/compose/${COMPOSE_FILE_ORG3_BASE} -f addOrg3/compose/${CONTAINER_CLI}/${CONTAINER_CLI}-${COMPOSE_FILE_ORG3_BASE}"
   COMPOSE_ORG3_COUCH_FILES="-f addOrg3/compose/${COMPOSE_FILE_ORG3_COUCH} -f addOrg3/compose/${CONTAINER_CLI}/${CONTAINER_CLI}-${COMPOSE_FILE_ORG3_COUCH}"
@@ -336,26 +615,46 @@ function networkDown() {
     fatalln "Container CLI  ${CONTAINER_CLI} not supported"
   fi
 
-
   # Don't remove the generated artifacts -- note, the ledgers are always removed
   if [ "$MODE" != "restart" ]; then
     # Bring down the network, deleting the volumes
-    ${CONTAINER_CLI} volume rm docker_orderer.example.com docker_peer0.org1.example.com docker_peer0.org2.example.com
+    # --- MELHORIA 2: Limpeza de volumes mais agressiva para pegar os Orderers dinâmicos ---
+    # Remove volumes padrão
+    ${CONTAINER_CLI} volume rm docker_orderer.example.com docker_peer0.org1.example.com docker_peer0.org2.example.com 2>/dev/null || true
+    # Tenta remover volumes de orderers extras (ex: docker_orderer2.example.com)
+    # Isso pega qualquer volume que comece com docker_orderer e termine com example.com
+    ${CONTAINER_CLI} volume rm $(${CONTAINER_CLI} volume ls -q | grep "docker_orderer.*\.example\.com") 2>/dev/null || true
+    # -------------------------------------------------------------------------------------
+
     #Cleanup the chaincode containers
     clearContainers
     #Cleanup images
     removeUnwantedImages
     #
     ${CONTAINER_CLI} kill $(${CONTAINER_CLI} ps -q --filter name=ccaas) || true
+    
     # remove orderer block and other channel configuration transactions and certs
     ${CONTAINER_CLI} run --rm -v "$(pwd):/data" busybox sh -c 'cd /data && rm -rf system-genesis-block/*.block organizations/peerOrganizations organizations/ordererOrganizations'
+    
     ## remove fabric ca artifacts
     ${CONTAINER_CLI} run --rm -v "$(pwd):/data" busybox sh -c 'cd /data && rm -rf organizations/fabric-ca/org1/msp organizations/fabric-ca/org1/tls-cert.pem organizations/fabric-ca/org1/ca-cert.pem organizations/fabric-ca/org1/IssuerPublicKey organizations/fabric-ca/org1/IssuerRevocationPublicKey organizations/fabric-ca/org1/fabric-ca-server.db'
     ${CONTAINER_CLI} run --rm -v "$(pwd):/data" busybox sh -c 'cd /data && rm -rf organizations/fabric-ca/org2/msp organizations/fabric-ca/org2/tls-cert.pem organizations/fabric-ca/org2/ca-cert.pem organizations/fabric-ca/org2/IssuerPublicKey organizations/fabric-ca/org2/IssuerRevocationPublicKey organizations/fabric-ca/org2/fabric-ca-server.db'
     ${CONTAINER_CLI} run --rm -v "$(pwd):/data" busybox sh -c 'cd /data && rm -rf organizations/fabric-ca/ordererOrg/msp organizations/fabric-ca/ordererOrg/tls-cert.pem organizations/fabric-ca/ordererOrg/ca-cert.pem organizations/fabric-ca/ordererOrg/IssuerPublicKey organizations/fabric-ca/ordererOrg/IssuerRevocationPublicKey organizations/fabric-ca/ordererOrg/fabric-ca-server.db'
     ${CONTAINER_CLI} run --rm -v "$(pwd):/data" busybox sh -c 'cd /data && rm -rf addOrg3/fabric-ca/org3/msp addOrg3/fabric-ca/org3/tls-cert.pem addOrg3/fabric-ca/org3/ca-cert.pem addOrg3/fabric-ca/org3/IssuerPublicKey addOrg3/fabric-ca/org3/IssuerRevocationPublicKey addOrg3/fabric-ca/org3/fabric-ca-server.db'
+    
     # remove channel and script artifacts
     ${CONTAINER_CLI} run --rm -v "$(pwd):/data" busybox sh -c 'cd /data && rm -rf channel-artifacts log.txt *.tar.gz'
+    
+    # --- MELHORIA 3: Limpar arquivos gerados dinamicamente e restaurar backup ---
+    rm -f compose/compose-orderers-dynamic.yaml
+    rm -f organizations/cryptogen/crypto-config-orderer.yaml
+    
+    # Restaura o configtx.yaml original se o backup existir
+    if [ -f "configtx/configtx.yaml.bak" ]; then
+        mv configtx/configtx.yaml.bak configtx/configtx.yaml
+        infoln "Configtx.yaml restaurado para o original."
+    fi
+    # ----------------------------------------------------------------------------
   fi
 }
 
@@ -366,6 +665,8 @@ CRYPTO="cryptogen"
 MAX_RETRY=5
 # default for delay between commands
 CLI_DELAY=3
+# Number of orderers
+ORDERER_COUNT=1
 # channel name defaults to "mychannel"
 CHANNEL_NAME="mychannel"
 # chaincode name defaults to "NA"
@@ -437,6 +738,10 @@ while [[ $# -ge 1 ]] ; do
     ;;
   -c )
     CHANNEL_NAME="$2"
+    shift
+    ;;
+  -o )
+    ORDERER_COUNT="$2"
     shift
     ;;
   -ca )
