@@ -36,6 +36,11 @@ function install_dependencies(){
     pip3 install --user pandas matplotlib || true
 }
 
+function network_down(){
+    cd "$DIRETORIO_REDE/test-network" || exit
+    ./network.sh down
+}
+
 function network_creation(){
     # Script para instalar o Hyperledger Fabric
     # curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh && \
@@ -68,6 +73,7 @@ function cleanup(){
 main() {
     cleanup
     install_dependencies
+    network_down
     network_creation
 }
 
