@@ -13,26 +13,47 @@ function install_dependencies(){
     sudo apt-get install -y git curl python3-pip jq golang-go ca-certificates gnupg lsb-release
 
     sudo snap install docker 
+    
+    # ---------------------------------------------------------
+    # MODIFICAÇÃO: Correção específica para Docker via SNAP
+    # Garante que o serviço iniciou e libera permissão no socket
+    echo "Configurando permissões do Docker (Snap)..."
+    sudo snap start docker || true
+    sleep 5 # Aguarda o daemon subir completamente
+    
+    # Esta linha resolve o 'permission denied' forçando acesso de leitura/escrita
+    if [ -e /var/run/docker.sock ]; then
+        sudo chmod 666 /var/run/docker.sock
+    else
+        echo "Aviso: Socket /var/run/docker.sock não encontrado. O Docker pode não estar rodando."
+    fi
+    # ---------------------------------------------------------
 
-    # Adiciona o usuário ao grupo docker se necessário e informa para re-login
+    # Adiciona o usuário ao grupo docker se necessário
     if ! groups "$USER" | grep -q '\bdocker\b'; then
+        sudo useradd docker 
         sudo usermod -aG docker "$USER"
-        echo "Usuário adicionado ao grupo 'docker'. Faça logout/login ou rode: newgrp docker"
     fi
 
-    # Verifica conectividade com o daemon e avisa em caso de erro
+    # Verifica conectividade com o daemon
     if ! docker info >/dev/null 2>&1; then
-        echo "Aviso: não foi possível conectar ao daemon Docker;"
-        echo " - Caso use o Docker Engine: execute 'sudo systemctl start docker' e verifique 'sudo systemctl status docker'."
-        echo " - Caso use Docker Desktop: execute 'systemctl --user start docker-desktop' e verifique 'systemctl --user status docker-desktop'."
-        echo "Se o problema for permissões, verifique se seu usuário está no grupo 'docker' (logout/login necessário)."
+        echo "Aviso: Ainda não foi possível conectar ao daemon Docker."
+        echo "Tentando forçar permissão novamente..."
+        sudo chmod 666 /var/run/docker.sock
+        
+        if ! docker info >/dev/null 2>&1; then
+            echo "ERRO CRÍTICO: Docker inacessível. Abortando."
+            exit 1
+        fi
     fi
 
-    # Mostra versões (não falhar se os comandos não existirem)
+    # Mostra versões
     docker --version || true
     docker compose version || true
-
-    # Instala pacotes Python no diretório do usuário para evitar necessidade de sudo
+    # Instala Node.js 20
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs build-essential
+    # Instala pacotes Python
     pip3 install --user pandas matplotlib || true
 }
 
