@@ -63,15 +63,21 @@ function network_down(){
 }
 
 function network_creation(){
+    local qtd_orderers=$1  # Recebe a quantidade de orderers passada pela main
+    
     # Script para instalar o Hyperledger Fabric
     # curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh && \
     # chmod +x install-fabric.sh && \
     cd "$DIRETORIO_REDE" || exit
     ./install-fabric.sh docker binary --fabric-version 2.4.9 
     cd ./test-network || exit
+    
     # Levantar a rede do Hyperledger Fabric
-    echo levantando a rede do Hyperledger Fabric
-    ./network.sh up createChannel -c gercom -s couchdb -o 5
+    echo "Levantando a rede do Hyperledger Fabric com $qtd_orderers orderers..."
+    
+    # O parametro -o agora usa a variável dinâmica
+    ./network.sh up createChannel -c gercom -s couchdb -o "$qtd_orderers"
+    
     echo Subindo chaincode na rede do Hyperledger Fabric
     ./network.sh deployCC -ccn simple -ccp "$DIRETORIO_CHAINCODE" -ccl go -c gercom
 }
@@ -92,10 +98,15 @@ function cleanup(){
 }
 
 main() {
+    # Define a quantidade de orderers: usa o argumento 1 ou 5 se estiver vazio
+    local orderers=${1:-5}
+
     cleanup
     install_dependencies
     network_down
-    network_creation
+    
+    # Passa a quantidade de orderers para a função de criação
+    network_creation "$orderers"
 }
 
 # Executa a função principal

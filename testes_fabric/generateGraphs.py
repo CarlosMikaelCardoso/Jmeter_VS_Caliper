@@ -14,10 +14,15 @@ NODE_COLORS = {
     'orderer3': '#bcbd22',     # Amarelo
     'orderer4': '#7f7f7f',     # Cinza
     'orderer5': '#ff9896',     # Salmão
+    'orderer6': '#9467bd',     # Roxo
+    'orderer7': '#8c564b',     # Marrom
+    'orderer8': '#e377c2',     # Rosa
+    'orderer9': '#7f7f7f',     # Cinza
+    'orderer10': '#bcbd22',    # Amarelo
     'peer0.org1': '#ff7f0e',   # Laranja
     'peer0.org2': '#2ca02c',   # Verde
-    'couchdb0': '#d62728',     # Vermelho
-    'couchdb1': '#9467bd',     # Roxo
+    # 'couchdb0': '#d62728',     # Vermelho
+    # 'couchdb1': '#9467bd',     # Roxo
     # Adicionando cores para Org3 caso exista
     'peer0.org3': '#8c564b',   # Marrom
     'couchdb2': '#e377c2',     # Rosa

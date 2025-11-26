@@ -39,7 +39,7 @@ class FabricConnector {
             await this.gateway.connect(ccp, {
                 wallet,
                 identity: userId,
-                discovery: { enabled: true, asLocalhost: true } // Assumindo que a API roda no mesmo host que o Docker
+                discovery: { enabled: true, asLocalhost: false } // Assumindo que a API roda no mesmo host que o Docker
             });
 
             // Obtém o canal e o contrato
