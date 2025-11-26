@@ -107,6 +107,21 @@ main() {
     
     # Passa a quantidade de orderers para a função de criação
     network_creation "$orderers"
+
+    # Adicionar ao final do setup_fabric_network.sh para configurar a API automaticamente
+    echo "Configurando API Fabric..."
+    API_DIR="${HOME}/Jmeter_VS_Caliper/api-fabric"
+    CONNECTION_JSON="${DIRETORIO_REDE}/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json"
+
+    if [ -f "$CONNECTION_JSON" ]; then
+        cp "$CONNECTION_JSON" "$API_DIR/config/connection-profile.json"
+        rm -rf "$API_DIR/wallet"
+        # Opcional: Executar o enroll automaticamente se tiver o node instalado no ambiente do script
+        # (cd "$API_DIR" && npm run enrollAdmin)
+        echo "Configuração da API atualizada com novos certificados."
+    else
+        echo "Aviso: connection-org1.json não encontrado. Verifique a criação da rede."
+    fi
 }
 
 # Executa a função principal
