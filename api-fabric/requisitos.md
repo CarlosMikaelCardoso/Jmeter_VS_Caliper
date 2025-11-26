@@ -28,6 +28,8 @@
 
 # 5 - Iniciando a API
 ```bash
+    export API_WORKERS=5
+    export API_CONCURRENCY_PER_WORKER=10
     npm start
 ```
 

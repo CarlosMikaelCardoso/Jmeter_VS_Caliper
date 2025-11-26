@@ -1,8 +1,9 @@
 // --- Variáveis de Ambiente Necessárias ---
 // export CHANNEL_NAME="mychannel"
 // export CHAINCODE_NAME="simple"
-// export API_USER="admin" (O usuário na wallet a ser usado)
-// export API_WORKERS=5 (Concorrência da fila, igual ao seu)
+// export API_USER="admin" 
+// export API_WORKERS=5  (Número de conexões físicas/Gateways)
+// export API_CONCURRENCY_PER_WORKER=10 (Transações simultâneas por conexão)
 
 const express = require('express');
 
@@ -17,18 +18,32 @@ const port = 3000;
 app.use(express.json());
 
 // --- Configuração das Variáveis de Ambiente ---
-const CHANNEL_NAME = process.env.CHANNEL_NAME || 'mychannel'; // Canal padrão
-const CHAINCODE_NAME = process.env.CHAINCODE_NAME || 'simple'; // Chaincode padrão (do seu teste)
-const API_USER = process.env.API_USER || 'admin'; // Usuário da wallet
-const NUM_WORKERS = parseInt(process.env.API_WORKERS || '5', 10);
+const CHANNEL_NAME = process.env.CHANNEL_NAME || 'mychannel';
+const CHAINCODE_NAME = process.env.CHAINCODE_NAME || 'simple';
+const API_USER = process.env.API_USER || 'admin';
 
-// --- Instâncias de Workload ---
-// Otimização: Criamos um único conector e o partilhamos com todos os workloads.
-const connector = new FabricConnector();
-let openWorkload, queryWorkload, transferWorkload;
+// Configuração de Concorrência
+const NUM_WORKERS = parseInt(process.env.API_WORKERS || '5', 10);
+const CONCURRENCY_PER_WORKER = parseInt(process.env.API_CONCURRENCY_PER_WORKER || '10', 10);
+const TOTAL_QUEUE_CONCURRENCY = NUM_WORKERS * CONCURRENCY_PER_WORKER;
+
+// --- Pool de Workers (Semelhante ao Caliper) ---
+// Armazena os objetos contendo o conector e os workloads dedicados
+const workerPool = [];
+let currentWorkerIndex = 0;
+
+// Função para obter o próximo worker (Round-Robin)
+// Distribui as requisições rotativamente entre as conexões disponíveis
+function getNextWorker() {
+    if (workerPool.length === 0) {
+        throw new Error("Nenhum worker disponível. A API ainda está inicializando?");
+    }
+    const worker = workerPool[currentWorkerIndex];
+    currentWorkerIndex = (currentWorkerIndex + 1) % workerPool.length;
+    return worker;
+}
 
 // --- Fila de Trabalhos (Job Queue) ---
-// Copiada da sua API Besu, mas simplificada (sem NonceManager)
 let processingErrors = [];
 
 class JobQueue {
@@ -36,7 +51,7 @@ class JobQueue {
         this.queue = [];
         this.workers = [];
         this.concurrency = concurrency;
-        console.log(`Fila de trabalhos iniciada com ${concurrency} workers.`);
+        console.log(`Fila de trabalhos configurada com capacidade de ${concurrency} execuções simultâneas.`);
     }
 
     addJob(job) {
@@ -49,13 +64,15 @@ class JobQueue {
     }
 
     processQueue() {
+        // Enquanto houver jobs e tivermos "espaço" na concorrência, despacha
         if (this.queue.length > 0 && this.workers.length < this.concurrency) {
             const job = this.queue.shift();
-            const worker = this.runWorker(job);
-            this.workers.push(worker);
+            const workerPromise = this.runWorker(job);
+            this.workers.push(workerPromise);
 
-            worker.finally(() => {
-                this.workers = this.workers.filter(w => w !== worker);
+            // Quando terminar, remove da lista de ativos e tenta processar o próximo
+            workerPromise.finally(() => {
+                this.workers = this.workers.filter(w => w !== workerPromise);
                 this.processQueue();
             });
         }
@@ -63,7 +80,6 @@ class JobQueue {
 
     async runWorker(job) {
         try {
-            // Lógica do NonceManager removida. Apenas executamos o job.
             await job();
         } catch (error) {
             console.error("Erro ao processar trabalho da fila:", error.message);
@@ -71,21 +87,21 @@ class JobQueue {
                 timestamp: new Date().toISOString(),
                 error: error.message,
                 reason: error.reason || 'N/A',
-                code: error.code || 'N/A'
             });
-            // (Opcional) Adicionar lógica de "retry" se desejar
         }
     }
 }
 
-const writeQueue = new JobQueue(NUM_WORKERS);
+// A fila agora aceita (Workers * Concorrência_por_Worker) tarefas ao mesmo tempo
+const writeQueue = new JobQueue(TOTAL_QUEUE_CONCURRENCY);
 
-// --- Endpoints de Controle (Idênticos ao seu) ---
+// --- Endpoints de Controle ---
 app.get('/queue/status', (req, res) => {
     res.status(200).json({
         isIdle: writeQueue.isIdle(),
         queueSize: writeQueue.queue.length,
-        activeWorkers: writeQueue.workers.length
+        activeWorkers: writeQueue.workers.length,
+        totalCapacity: TOTAL_QUEUE_CONCURRENCY
     });
 });
 
@@ -99,71 +115,101 @@ app.post('/errors/clear', (req, res) => {
     res.status(200).json({ message: "Log de erros limpo." });
 });
 
-// --- Endpoints de Transação (Idênticos ao seu) ---
+// --- Endpoints de Transação ---
+
 app.post('/open-async', (req, res) => {
     const { accountId, amount } = req.body;
-    if (!accountId || amount === undefined) return res.status(400).json({ error: "Campos 'accountId' e 'amount' são obrigatórios." });
+    if (!accountId || amount === undefined) return res.status(400).json({ error: "Campos obrigatórios ausentes." });
 
+    // Adiciona à fila. O Node.js vai processar isso assim que houver vaga na fila.
     writeQueue.addJob(async () => {
+        // Dentro do job, escolhemos qual conexão física usar
+        const worker = getNextWorker();
         try {
-            const txResponse = await openWorkload.submitTransaction(accountId, amount);
-            console.log(`(Fila) Transação 'open' para ${accountId} submetida.`);
+            // O método submitTransaction é async e retorna quando o Fabric confirma (ou falha)
+            await worker.workloads.open.submitTransaction(accountId, amount);
+            // console.log(`(Fila -> Worker ${worker.id}) Transação 'open' para ${accountId} concluída.`);
         } catch (e) {
-            console.error(`(Fila) Falha no 'open' para ${accountId}: ${e.message}`);
-            // O erro já é capturado pelo runWorker
-            throw e; // Lança o erro para o runWorker capturar
+            throw new Error(`Falha no 'open' (Worker ${worker.id}): ${e.message}`);
         }
     });
 
-    res.status(202).json({ message: `Transação 'open' para ${accountId} enfileirada com sucesso.` });
+    res.status(202).json({ message: `Transação 'open' enfileirada.` });
 });
 
 app.post('/transfer-async', (req, res) => {
     const { from, to, amount } = req.body;
-    if (!from || !to || amount === undefined) return res.status(400).json({ error: "Os campos 'from', 'to' e 'amount' são obrigatórios." });
+    if (!from || !to || amount === undefined) return res.status(400).json({ error: "Campos obrigatórios ausentes." });
 
     writeQueue.addJob(async () => {
+        const worker = getNextWorker();
         try {
-            const txResponse = await transferWorkload.submitTransaction(from, to, amount);
-            console.log(`(Fila) Transação 'transfer' de ${from} para ${to} submetida.`);
+            await worker.workloads.transfer.submitTransaction(from, to, amount);
+            // console.log(`(Fila -> Worker ${worker.id}) Transação 'transfer' concluída.`);
         } catch (e) {
-            console.error(`(Fila) Falha no 'transfer': ${e.message}`);
-            throw e;
+            throw new Error(`Falha no 'transfer' (Worker ${worker.id}): ${e.message}`);
         }
     });
 
-    res.status(202).json({ message: "Transação 'transfer' enfileirada com sucesso." });
+    res.status(202).json({ message: "Transação 'transfer' enfileirada." });
 });
 
 app.get('/query/:accountId', async (req, res) => {
     const { accountId } = req.params;
-    if (!accountId) return res.status(400).json({ error: "O campo 'accountId' é obrigatório." });
-
+    
     try {
-        // 'query' é uma chamada síncrona (evaluateTransaction), não precisa da fila.
-        const balance = await queryWorkload.submitTransaction(accountId);
+        // Queries (Leitura) não passam pela fila de escrita para não serem bloqueadas.
+        // Elas usam o pool diretamente para balancear a carga entre as conexões.
+        const worker = getNextWorker();
+        const balance = await worker.workloads.query.submitTransaction(accountId);
         res.status(200).json({ accountId: accountId, balance: balance.toString() });
     } catch (error) {
-        console.error(`Falha ao executar 'query' para a conta ${accountId}:`, error);
-        res.status(500).json({ error: "Falha ao executar a função 'query'.", details: error.message });
+        console.error(`Falha ao executar 'query':`, error);
+        res.status(500).json({ error: "Falha na query", details: error.message });
     }
 });
 
-// --- Iniciar o Servidor ---
+// --- Inicialização do Servidor e Workers ---
 async function startServer() {
-    // Inicializa o conector do Fabric ANTES de aceitar requisições
-    await connector.initialize(API_USER, CHANNEL_NAME, CHAINCODE_NAME);
+    console.log(`--- Inicializando API Fabric ---`);
+    console.log(`Workers Físicos (Gateways): ${NUM_WORKERS}`);
+    console.log(`Concorrência por Worker: ${CONCURRENCY_PER_WORKER}`);
+    console.log(`Capacidade Total da Fila: ${TOTAL_QUEUE_CONCURRENCY}`);
 
-    // Agora que o conector está pronto, injeta-o nos workloads
-    openWorkload = new OpenWorkload(connector);
-    queryWorkload = new QueryWorkload(connector);
-    transferWorkload = new TransferWorkload(connector);
+    try {
+        // Cria N conexões independentes, isolando os contextos como no Caliper
+        for (let i = 0; i < NUM_WORKERS; i++) {
+            console.log(`Iniciando Worker #${i + 1}...`);
+            
+            const connector = new FabricConnector();
+            // Cada connector cria seu próprio Gateway e conexão gRPC
+            await connector.initialize(API_USER, CHANNEL_NAME, CHAINCODE_NAME);
+            
+            // Cria workloads vinculados a este conector específico
+            const workloads = {
+                open: new OpenWorkload(connector),
+                query: new QueryWorkload(connector),
+                transfer: new TransferWorkload(connector)
+            };
 
-    app.listen(port, () => {
-        console.log(`Servidor da API (Fabric) a correr em http://localhost:${port}`);
-        console.log(`API a usar ${NUM_WORKERS} workers.`);
-        console.log(`Conectado ao canal '${CHANNEL_NAME}' e chaincode '${CHAINCODE_NAME}' como usuário '${API_USER}'.`);
-    });
+            workerPool.push({
+                id: i + 1,
+                connector: connector,
+                workloads: workloads
+            });
+        }
+
+        console.log(`Todos os ${workerPool.length} workers foram inicializados com sucesso.`);
+
+        app.listen(port, () => {
+            console.log(`Servidor da API rodando em http://localhost:${port}`);
+            console.log(`Canal: ${CHANNEL_NAME} | Chaincode: ${CHAINCODE_NAME} | Usuário: ${API_USER}`);
+        });
+
+    } catch (error) {
+        console.error("Erro fatal na inicialização dos workers:", error);
+        process.exit(1);
+    }
 }
 
 startServer();

@@ -39,10 +39,13 @@ const DOCKER_CONTAINERS_TO_MONITOR = [
     "orderer3.example.com",
     "orderer4.example.com",
     "orderer5.example.com",
+    "orderer6.example.com",
+    "orderer7.example.com",
+    "orderer8.example.com",
+    "orderer9.example.com",
+    "orderer10.example.com",
     "peer0.org1.example.com",
     "peer0.org2.example.com",
-    "couchdb0",
-    "couchdb1"
     // Adicione containers de chaincode (dev-peer*) dinamicamente se necessário
 ];
 
