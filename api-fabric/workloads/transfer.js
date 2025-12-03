@@ -7,6 +7,7 @@ class Transfer {
 
     async submitTransaction(from, to, amount) {
         const args = [from, to, amount.toString()];
+        // Chama a função 'transfer' do chaincode
         return await this.connector.invoke('transfer', args);
     }
 }
