@@ -53,6 +53,4 @@ temp_eth_gen/
 config/
 builders/
 bin/
-testes_fabric/chaincode_simple/simple/node
-testes_fabric/chaincode_simple/simple/go/vendor/
-testes_fabric/chaincode_simple/smallbank/
+results/
