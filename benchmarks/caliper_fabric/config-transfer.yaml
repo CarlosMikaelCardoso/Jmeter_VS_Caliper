@@ -1,0 +1,21 @@
+simpleArgs: &simple-args
+  initialMoney: 10000
+  moneyToTransfer: 100
+  numberOfAccounts: &number-of-accounts 50
+
+test:
+  name: simple-transfer 
+  description: Rodada de Transfer (Transferência de Contas) 
+  workers:
+    number: 1
+  rounds:
+    - label: transfer
+      description: Teste de performance de transferência. 
+      txNumber: *number-of-accounts
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 5 
+      workload:
+        module: benchmarks/caliper_fabric/transfer.js
+        arguments: *simple-args
