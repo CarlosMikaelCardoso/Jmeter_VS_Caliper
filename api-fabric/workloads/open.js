@@ -6,21 +6,15 @@ class Open {
     }
 
     /**
-     * Monta e envia a transação 'query'.
-     * @param {string} accountId A conta a ser consultada.
-     * @returns {Promise<Object>} Objeto com saldo (string) e latência.
+     * Monta e envia a transação 'open'.
+     * @param {string} accountId A conta a ser criada.
+     * @param {number} amount O valor inicial.
+     * @returns {Promise<Object>} { result, latency_ms }
      */
-    async submitTransaction(accountId) {
-        const args = [accountId];
-        
-        // * Recebe o objeto { result, latency_ms } do connector
-        const response = await this.connector.query('query', args);
-        
-        // * Retorna o valor processado mas mantém a latência
-        return {
-            balance: response.result.toString('utf8'),
-            latency_ms: response.latency_ms
-        };
+    async submitTransaction(accountId, amount) {
+        const args = [accountId, amount.toString()];
+        // DEVE chamar invoke com a função 'open'
+        return await this.connector.invoke('open', args);
     }
 }
 
