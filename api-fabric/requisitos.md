@@ -3,18 +3,13 @@
 ```bash
     npm install
 ```
-# 2 - Configurando a Rede do Hyperledger Fabric
-```bash
-    cd api-fabric
-    cp ../testes_fabric/network_fabric/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json connection-profile.json
-```
 
-# 3 - Enrolando o Admin da Organização
+# 2 - Enrolando o Admin da Organização
 ```bash
     npm run enrollAdmin
 ``` 
 
-# 4 - Definindo Variáveis de Ambiente
+# 3 - Definindo Variáveis de Ambiente
 ```bash
     # O canal do seu chaincode (ex: gercom)
     export CHANNEL_NAME="gercom"
@@ -26,14 +21,8 @@
     export API_USER="admin"
 ```
 
-# 5 - Iniciando a API
+# 4 - Iniciando a API
 ```bash
-    export API_WORKERS=5
-    export API_CONCURRENCY_PER_WORKER=10
     npm start
 ```
 
-
-# NPM Setup for Node.js 18.x
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs build-essential
