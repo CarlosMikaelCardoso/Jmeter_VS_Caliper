@@ -3,7 +3,6 @@
 // export CHAINCODE_NAME="simple"
 // export API_USER="admin" 
 // export API_WORKERS=5  (Número de conexões físicas/Gateways)
-// export API_CONCURRENCY_PER_WORKER=10 (Transações simultâneas por conexão)
 
 const express = require('express');
 
@@ -24,11 +23,9 @@ const API_USER = process.env.API_USER || 'admin';
 
 // Configuração de Concorrência
 const NUM_WORKERS = parseInt(process.env.API_WORKERS || '5', 10);
-const CONCURRENCY_PER_WORKER = parseInt(process.env.API_CONCURRENCY_PER_WORKER || '10', 10);
-const TOTAL_QUEUE_CONCURRENCY = NUM_WORKERS * CONCURRENCY_PER_WORKER;
 
-// --- Pool de Workers (Semelhante ao Caliper) ---
-// Armazena os objetos contendo o conector e os workloads dedicados
+// --- Pool de Workers (Proxy Stateful) ---
+// Mantém conexões persistentes (Gateways) abertas para evitar overhead de handshake SSL
 const workerPool = [];
 let currentWorkerIndex = 0;
 
@@ -43,138 +40,109 @@ function getNextWorker() {
     return worker;
 }
 
-// --- Fila de Trabalhos (Job Queue) ---
-let processingErrors = [];
+// --- Endpoints de Transação (Síncronos) ---
 
-class JobQueue {
-    constructor(concurrency) {
-        this.queue = [];
-        this.workers = [];
-        this.concurrency = concurrency;
-        console.log(`Fila de trabalhos configurada com capacidade de ${concurrency} execuções simultâneas.`);
-    }
-
-    addJob(job) {
-        this.queue.push(job);
-        this.processQueue();
-    }
-    
-    isIdle() {
-        return this.queue.length === 0 && this.workers.length === 0;
-    }
-
-    processQueue() {
-        // Enquanto houver jobs e tivermos "espaço" na concorrência, despacha
-        if (this.queue.length > 0 && this.workers.length < this.concurrency) {
-            const job = this.queue.shift();
-            const workerPromise = this.runWorker(job);
-            this.workers.push(workerPromise);
-
-            // Quando terminar, remove da lista de ativos e tenta processar o próximo
-            workerPromise.finally(() => {
-                this.workers = this.workers.filter(w => w !== workerPromise);
-                this.processQueue();
-            });
-        }
-    }
-
-    async runWorker(job) {
-        try {
-            await job();
-        } catch (error) {
-            console.error("Erro ao processar trabalho da fila:", error.message);
-            processingErrors.push({
-                timestamp: new Date().toISOString(),
-                error: error.message,
-                reason: error.reason || 'N/A',
-            });
-        }
-    }
-}
-
-// A fila agora aceita (Workers * Concorrência_por_Worker) tarefas ao mesmo tempo
-const writeQueue = new JobQueue(TOTAL_QUEUE_CONCURRENCY);
-
-// --- Endpoints de Controle ---
-app.get('/queue/status', (req, res) => {
-    res.status(200).json({
-        isIdle: writeQueue.isIdle(),
-        queueSize: writeQueue.queue.length,
-        activeWorkers: writeQueue.workers.length,
-        totalCapacity: TOTAL_QUEUE_CONCURRENCY
-    });
-});
-
-app.get('/errors/get', (req, res) => {
-    res.status(200).json({ errors: processingErrors });
-});
-
-app.post('/errors/clear', (req, res) => {
-    console.log("Limpando log de erros de processamento.");
-    processingErrors = [];
-    res.status(200).json({ message: "Log de erros limpo." });
-});
-
-// --- Endpoints de Transação ---
-
-app.post('/open-async', (req, res) => {
+/**
+ * Rota para abrir conta.
+ * O sufixo "-async" foi mantido para compatibilidade com o script JMX,
+ * mas o comportamento agora é SÍNCRONO (bloqueante).
+ */
+app.post('/open-async', async (req, res) => {
     const { accountId, amount } = req.body;
-    if (!accountId || amount === undefined) return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    if (!accountId || amount === undefined) {
+        return res.status(400).json({ error: "Campos obrigatórios ausentes (accountId, amount)." });
+    }
 
-    // Adiciona à fila. O Node.js vai processar isso assim que houver vaga na fila.
-    writeQueue.addJob(async () => {
-        // Dentro do job, escolhemos qual conexão física usar
+    try {
+        // 1. Seleciona uma conexão persistente
         const worker = getNextWorker();
-        try {
-            // O método submitTransaction é async e retorna quando o Fabric confirma (ou falha)
-            await worker.workloads.open.submitTransaction(accountId, amount);
-            // console.log(`(Fila -> Worker ${worker.id}) Transação 'open' para ${accountId} concluída.`);
-        } catch (e) {
-            throw new Error(`Falha no 'open' (Worker ${worker.id}): ${e.message}`);
-        }
-    });
 
-    res.status(202).json({ message: `Transação 'open' enfileirada.` });
+        // 2. Executa a transação e ESPERA a confirmação do Fabric (Submit -> Orderer -> Peer Commit)
+        // O objeto 'response' deve vir do conector com { result, latency_ms }
+        const response = await worker.workloads.open.submitTransaction(accountId, amount);
+
+        // 3. Retorna sucesso e a latência pura do SDK para o JMeter
+        res.status(200).json({ 
+            status: "OK",
+            message: `Conta ${accountId} criada.`,
+            latency_ms: response.latency_ms, // Métrica crítica para comparação com Caliper
+            result: response.result ? response.result.toString() : null
+        });
+
+    } catch (e) {
+        console.error(`Erro em /open-async (Worker ID incerto): ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
 });
 
-app.post('/transfer-async', (req, res) => {
+/**
+ * Rota para transferência.
+ * Comportamento SÍNCRONO.
+ */
+app.post('/transfer-async', async (req, res) => {
     const { from, to, amount } = req.body;
-    if (!from || !to || amount === undefined) return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    if (!from || !to || amount === undefined) {
+        return res.status(400).json({ error: "Campos obrigatórios ausentes (from, to, amount)." });
+    }
 
-    writeQueue.addJob(async () => {
+    try {
         const worker = getNextWorker();
-        try {
-            await worker.workloads.transfer.submitTransaction(from, to, amount);
-            // console.log(`(Fila -> Worker ${worker.id}) Transação 'transfer' concluída.`);
-        } catch (e) {
-            throw new Error(`Falha no 'transfer' (Worker ${worker.id}): ${e.message}`);
-        }
-    });
 
-    res.status(202).json({ message: "Transação 'transfer' enfileirada." });
+        // Espera todo o fluxo de consenso
+        const response = await worker.workloads.transfer.submitTransaction(from, to, amount);
+
+        res.status(200).json({ 
+            status: "OK", 
+            message: "Transferência realizada.",
+            latency_ms: response.latency_ms,
+            result: response.result ? response.result.toString() : null
+        });
+
+    } catch (e) {
+        console.error(`Erro em /transfer-async: ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
 });
 
+/**
+ * Rota para consulta (Query).
+ * Já era síncrona, mas agora repassa a métrica de latência.
+ */
 app.get('/query/:accountId', async (req, res) => {
     const { accountId } = req.params;
     
     try {
-        // Queries (Leitura) não passam pela fila de escrita para não serem bloqueadas.
-        // Elas usam o pool diretamente para balancear a carga entre as conexões.
         const worker = getNextWorker();
-        const balance = await worker.workloads.query.submitTransaction(accountId);
-        res.status(200).json({ accountId: accountId, balance: balance.toString() });
+        
+        // Query (evaluateTransaction) é mais rápida pois não vai para o Orderer
+        const response = await worker.workloads.query.submitTransaction(accountId);
+        
+        res.status(200).json({ 
+            accountId: accountId, 
+            balance: response.balance, // query.js já converte buffer para string em 'balance'
+            latency_ms: response.latency_ms
+        });
+
     } catch (error) {
         console.error(`Falha ao executar 'query':`, error);
         res.status(500).json({ error: "Falha na query", details: error.message });
     }
 });
 
+// --- Endpoints de Controle/Monitoramento ---
+// Mantidos para verificar saúde da API, mas 'queue' sempre estará vazia/inativa.
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'Active',
+        activeWorkers: workerPool.length,
+        mode: 'Synchronous Stateful Proxy'
+    });
+});
+
 // --- Inicialização do Servidor e Workers ---
 async function startServer() {
-    console.log(`--- Inicializando API Fabric ---`);
-    console.log(`Workers Físicos (Gateways): ${NUM_WORKERS}`);
-    console.log(`Concorrência por Worker: ${CONCURRENCY_PER_WORKER}`);
-    console.log(`Capacidade Total da Fila: ${TOTAL_QUEUE_CONCURRENCY}`);
+    console.log(`--- Inicializando API Fabric (Modo Paridade Caliper) ---`);
+    console.log(`Workers Físicos (Conexões Persistentes): ${NUM_WORKERS}`);
 
     try {
         // Cria N conexões independentes, isolando os contextos como no Caliper
@@ -182,7 +150,7 @@ async function startServer() {
             console.log(`Iniciando Worker #${i + 1}...`);
             
             const connector = new FabricConnector();
-            // Cada connector cria seu próprio Gateway e conexão gRPC
+            // Cada connector cria seu próprio Gateway e conexão gRPC persistente
             await connector.initialize(API_USER, CHANNEL_NAME, CHAINCODE_NAME);
             
             // Cria workloads vinculados a este conector específico
@@ -204,6 +172,7 @@ async function startServer() {
         app.listen(port, () => {
             console.log(`Servidor da API rodando em http://localhost:${port}`);
             console.log(`Canal: ${CHANNEL_NAME} | Chaincode: ${CHAINCODE_NAME} | Usuário: ${API_USER}`);
+            console.log(`NOTA: A API agora opera em modo SÍNCRONO. Ajuste o timeout do JMeter.`);
         });
 
     } catch (error) {

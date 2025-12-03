@@ -664,7 +664,7 @@ CRYPTO="cryptogen"
 # another container before giving up
 MAX_RETRY=5
 # default for delay between commands
-CLI_DELAY=3
+CLI_DELAY=10
 # Number of orderers
 ORDERER_COUNT=1
 # channel name defaults to "mychannel"

@@ -55,33 +55,58 @@ class FabricConnector {
         }
     }
 
-    /**
+/**
      * Envia uma transação de consulta (read-only).
      * @param {string} funcName Nome da função do chaincode.
      * @param {string[]} args Argumentos para a função.
-     * @returns {Promise<Buffer>} O resultado da consulta.
+     * @returns {Promise<Object>} Objeto contendo o resultado e a latência.
      */
     async query(funcName, args = []) {
         if (!this.contract) {
             throw new Error('Contrato não inicializado.');
         }
-        console.log(`(Query) Chamando: ${funcName}(${args.join(',')})`);
-        return this.contract.evaluateTransaction(funcName, ...args);
+        // console.log(`(Query) Chamando: ${funcName}(${args.join(',')})`); // Comentado para reduzir I/O
+
+        // * Início da medição precisa
+        const startTime = Date.now();
+        
+        const result = await this.contract.evaluateTransaction(funcName, ...args);
+
+        // * Fim da medição
+        const latency = Date.now() - startTime;
+
+        // * Retorna estrutura rica com dados e métricas
+        return {
+            result: result,
+            latency_ms: latency
+        };
     }
 
     /**
      * Envia uma transação de invoke (escrita).
      * @param {string} funcName Nome da função do chaincode.
      * @param {string[]} args Argumentos para a função.
-     * @returns {Promise<Buffer>} O resultado da submissão.
+     * @returns {Promise<Object>} Objeto contendo o resultado e a latência.
      */
     async invoke(funcName, args = []) {
         if (!this.contract) {
             throw new Error('Contrato não inicializado.');
         }
-        console.log(`(Invoke) Chamando: ${funcName}(${args.join(',')})`);
-        // submitTransaction espera pela submissão E commit
-        return this.contract.submitTransaction(funcName, ...args);
+        // console.log(`(Invoke) Chamando: ${funcName}(${args.join(',')})`); 
+
+        // * Início da medição precisa
+        const startTime = Date.now();
+
+        // submitTransaction espera pela submissão E commit no Peer (igual ao Caliper)
+        const result = await this.contract.submitTransaction(funcName, ...args);
+
+        // * Fim da medição
+        const latency = Date.now() - startTime;
+
+        return {
+            result: result,
+            latency_ms: latency
+        };
     }
 
     /**
