@@ -79,7 +79,7 @@ generate_caliper_style_accounts_csv() {
     local open_csv_prefix="$JMETER_RUNS_DIR/open_accounts_thread_"
     local open_csv="$JMETER_RUNS_DIR/open_accounts.csv"
     local transfer_csv="$JMETER_RUNS_DIR/transfer_accounts.csv"
-
+    
     # Apaga contas antigas para garantir que não haja lixo de execuções anteriores
     rm -f "${open_csv_prefix}"*
     rm -f "$accounts_file"
@@ -90,7 +90,7 @@ generate_caliper_style_accounts_csv() {
         const DICTIONARY = 'abcdefghijklmnopqrstuvwxyz';
         function get26Num(n) { let result = ''; while(n >= 0) { result = DICTIONARY.charAt(n % DICTIONARY.length) + result; n = Math.floor(n / DICTIONARY.length) - 1; } return result; }
         const fs = require('fs');
-
+        
         let total_accounts = [];
         let account_index = 0;
 
@@ -129,60 +129,13 @@ generate_caliper_style_accounts_csv() {
     echo "${TRANSFER_TX_NUMBER} pares de transferência gerados."
 }
 
-wait_for_queue_and_check_errors() {
-    local round_name=$1
-    local run_number=$2
-    local error_log_file="$JMETER_RUNS_DIR/backend_errors.log"
-
-    echo "--- Sincronizando: Aguardando a finalização do processamento da API para a rodada '$round_name' ---"
-
-    while true; do
-        # Tenta obter o status da API (porta 3000)
-        status_output=$(curl -s -f http://${API_HOST}:3000/queue/status)
-
-        # Verifica se o curl teve sucesso e se a resposta é um JSON válido
-        if [ $? -eq 0 ] && echo "$status_output" | jq -e . > /dev/null 2>&1; then
-            if echo "$status_output" | jq -e '.isIdle == true'; then
-                echo "API finalizou o processamento da fila."
-                break
-            fi
-        fi
-
-        echo -n "."
-        sleep 2
-    done
-
-    echo "Verificando se ocorreram erros assíncronos no servidor..."
-    errors_output=$(curl -s http://${API_HOST}:3000/errors/get)
-
-    # Verifica se a resposta de erros é um JSON válido antes de tentar processar
-    if echo "$errors_output" | jq -e . > /dev/null 2>&1; then
-        error_count=$(echo "$errors_output" | jq '.errors | length')
-
-        if [ "$error_count" -gt 0 ]; then
-            echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            echo "AVISO: Foram detectados $error_count erros de processamento no back-end!"
-            echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            # Grava a contagem de erros para o script de gráficos usar
-            echo "$round_name,$run_number,$error_count,$(echo "$errors_output" | jq -c .)" >> "$error_log_file"
-        else
-            echo "Nenhum erro de processamento assíncrono encontrado."
-        fi
-    else
-        echo "Aviso: Não foi possível obter uma resposta JSON válida do endpoint de erros."
-    fi
-
-    # Limpa sempre os erros na API (porta 3000) para a próxima rodada
-    curl -s -X POST http://${API_HOST}:3000/errors/clear > /dev/null
-}
-
-# --- FUNÇÃO MODIFICADA ---
 run_test_and_monitor() {
     local JMX_FILE=$1
     local ROUND_NAME=$2
     local RUN_NUMBER=$3
     local CSV_FILE_PATH=$4
-    local IS_WRITE_OPERATION=$5 # Novo parâmetro para saber se é 'open' ou 'transfer'
+    
+    # O parâmetro IS_WRITE_OPERATION foi removido pois a sincronização é automática agora
 
     local JTL_FILE="$JMETER_RUNS_DIR/results_${ROUND_NAME,,}_run_${RUN_NUMBER}.jtl"
     local DOCKER_STATS_LOG_PATH="$JMETER_RUNS_DIR/docker_stats_${ROUND_NAME,,}_run_${RUN_NUMBER}.log"
@@ -195,7 +148,7 @@ run_test_and_monitor() {
         http://${API_HOST}:3002/monitor/start
 
     echo "Usando arquivo de dados: $CSV_FILE_PATH"
-    # O JMeter continua apontando para a porta 3000 (API_HOST)
+    # O JMeter continua apontando para a porta 3000 (API_HOST) onde a API Síncrona roda
     "$JMETER_HOME/jmeter" -n -t "$JMX_FILE" -l "$JTL_FILE" \
         -JcsvDataFile="$CSV_FILE_PATH" \
         -JapiHost="$API_HOST"
@@ -204,11 +157,6 @@ run_test_and_monitor() {
     curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": \"${RUN_NUMBER}\"}" \
         http://${API_HOST}:3002/monitor/stop
-
-    # Esta função (wait_for_queue) continua usando a porta 3000 (correto)
-    if [ "$IS_WRITE_OPERATION" = true ]; then
-        wait_for_queue_and_check_errors "$ROUND_NAME" "$RUN_NUMBER"
-    fi
 
     echo "A descarregar o ficheiro de log de monitoramento (porta 3002)..."
     curl -s -o "$DOCKER_STATS_LOG_PATH" "http://${API_HOST}:3002/monitor/logs/${ROUND_NAME}/${RUN_NUMBER}"
@@ -234,26 +182,18 @@ export JMETER_HOME="$(pwd)/${JMETER_DIR}/bin"
 
 check_and_install_java
 
-# if [ ! -s "$CONTRACT_ADDRESS_FILE" ]; then
-#     echo "Erro: Arquivo '$CONTRACT_ADDRESS_FILE' não encontrado ou vazio. Execute o deploy do contrato primeiro."
-#     exit 1
-# fi
-# CONTRACT_ADDRESS=$(<"$CONTRACT_ADDRESS_FILE")
-
+# Gera as contas necessárias para o teste
 generate_caliper_style_accounts_csv
-
-# Limpa qualquer erro antigo na API (porta 3000) antes de começar
-curl -s -X POST http://${API_HOST}:3000/errors/clear > /dev/null
 
 # Execução em Loop
 for (( i=1; i<=$NUM_REPETITIONS; i++ ))
 do
     echo -e "\n--- Iniciando Execução JMeter #$i de $NUM_REPETITIONS ---"
-
-    # run_test_and_monitor <jmx_file> <round_name> <run_number> <csv_file> <is_write_operation>
-    run_test_and_monitor "$JMX_OPEN" "Open" "$i" "$JMETER_RUNS_DIR/open_accounts.csv" true
-    run_test_and_monitor "$JMX_QUERY" "Query" "$i" "$JMETER_RUNS_DIR/open_accounts_thread_" false
-    run_test_and_monitor "$JMX_TRANSFER" "Transfer" "$i" "$JMETER_RUNS_DIR/transfer_accounts.csv" true
+    
+    # run_test_and_monitor <jmx_file> <round_name> <run_number> <csv_file>
+    run_test_and_monitor "$JMX_OPEN" "Open" "$i" "$JMETER_RUNS_DIR/open_accounts.csv"
+    run_test_and_monitor "$JMX_QUERY" "Query" "$i" "$JMETER_RUNS_DIR/open_accounts_thread_"
+    run_test_and_monitor "$JMX_TRANSFER" "Transfer" "$i" "$JMETER_RUNS_DIR/transfer_accounts.csv"
 
 done
 
