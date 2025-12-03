@@ -1,20 +1,24 @@
 'use strict';
 
-class Query {
+class Transfer {
     constructor(fabricConnector) {
         this.connector = fabricConnector;
     }
 
     /**
-     * Monta e envia a transação 'query'.
-     * @param {string} accountId A conta a ser consultada.
-     * @returns {Promise<string>} O resultado da consulta (saldo).
+     * Monta e envia a transação 'transfer'.
+     * @param {string} from Conta de origem.
+     * @param {string} to Conta de destino.
+     * @param {number} amount Valor a transferir.
+     * @returns {Promise<Object>} Resultado e latência.
      */
-    async submitTransaction(accountId) {
-        const args = [accountId];
-        const resultBuffer = await this.connector.query('query', args);
-        return resultBuffer.toString('utf8');
+    async submitTransaction(from, to, amount) {
+        // Argumentos: [account1, account2, money]
+        const args = [from, to, amount.toString()];
+        
+        // Chama invoke (escrita) no conector
+        return await this.connector.invoke('transfer', args);
     }
 }
 
-module.exports = Query;
+module.exports = Transfer;

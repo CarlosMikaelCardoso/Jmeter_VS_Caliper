@@ -65,10 +65,10 @@ func (t *SimpleChaincode) Open(stub shim.ChaincodeStubInterface, args []string) 
 	}
 
 	account  := args[0]
-	money,err := stub.GetState(account)
-	if money != nil {
-		return shim.Error(ERROR_ACCOUNT_EXISTING)
-	}
+	money, err := stub.GetState(account)
+    if money != nil {
+        return shim.Error(ERROR_ACCOUNT_EXISTING) // Código 302
+    }
 
 	_,err = strconv.Atoi(args[1])
 	if err != nil {
