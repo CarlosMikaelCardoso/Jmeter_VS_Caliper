@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -32,6 +33,16 @@ const ERROR_MONEY_NOT_ENOUGH = "{\"code\":304, \"reason\": \"account's money is 
 
 type SimpleChaincode struct {
 
+}
+
+type ReturnError struct {
+	Code   int    `json:"code"`
+	Reason string `json:"reason"`
+}
+
+func jsonError(code int, reason string) pb.Response {
+	errBytes, _ := json.Marshal(ReturnError{Code: code, Reason: reason})
+	return shim.Error(string(errBytes))
 }
 
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
@@ -61,13 +72,23 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 // open an account, should be [open account money]
 func (t *SimpleChaincode) Open(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 	if len(args) != 2 {
-		return shim.Error(ERROR_WRONG_FORMAT)
+		return jsonError(301, "command format is wrong") // Uso do helper
 	}
 
-	account  := args[0]
+	account := args[0]
 	money, err := stub.GetState(account)
     if money != nil {
         return shim.Error(ERROR_ACCOUNT_EXISTING) // Código 302
+    }
+
+	// OTIMIZAÇÃO: Verificação de existência
+    // GetState retorna bytes vazios se não existir, e erro apenas se falhar o acesso ao banco
+    existingBytes, err := stub.GetState(account)
+    if err != nil {
+         return jsonError(300, fmt.Sprintf("system error: %s", err.Error()))
+    }
+    if existingBytes != nil {
+        return jsonError(302, "account already exists") // * Código mais limpo
     }
 
 	_,err = strconv.Atoi(args[1])

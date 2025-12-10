@@ -26,6 +26,10 @@ const NUM_WORKERS = parseInt(process.env.API_WORKERS || '5', 10);
 const workerPool = [];
 let currentWorkerIndex = 0;
 
+// Controle de concorrência simples
+const MAX_PENDING_TX = 500; // Ajuste conforme a capacidade da sua máquina/rede
+let pendingTransactions = 0;
+
 function getNextWorker() {
     if (workerPool.length === 0) throw new Error("API não inicializada.");
     const worker = workerPool[currentWorkerIndex];
@@ -43,6 +47,14 @@ app.post('/open-async', (req, res) => {
         return res.status(400).json({ error: "Dados incompletos" });
     }
 
+    // Retornar 429 se o servidor estiver sobrecarregado
+    // Isso simula um cenário real e protege sua API de crashar durante o teste
+    if (pendingTransactions >= MAX_PENDING_TX) {
+        return res.status(429).json({ error: "Backpressure: Server overloaded, slow down." });
+    }
+
+    pendingTransactions++; // * Incrementa contador
+
     // 2. Resposta Imediata para o JMeter (Alta Taxa de Envio)
     res.status(202).json({ 
         status: "Accepted", 
@@ -53,14 +65,12 @@ app.post('/open-async', (req, res) => {
     (async () => {
         try {
             const worker = getNextWorker();
-            
-            // A medição de tempo acontece DENTRO deste método
             const response = await worker.workloads.open.submitTransaction(accountId, amount);
-            
-            // Logamos a latência real no console da API para monitoramento
             console.log(`[OPEN] Sucesso: Conta ${accountId} | Latência Fabric: ${response.latency_ms}ms`);
         } catch (e) {
             console.error(`[OPEN] Erro Background (${accountId}): ${e.message}`);
+        } finally {
+            pendingTransactions--; // * Decrementa contador independente de sucesso ou erro
         }
     })();
 });

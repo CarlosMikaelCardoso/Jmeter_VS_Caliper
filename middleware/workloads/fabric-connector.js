@@ -4,6 +4,9 @@ const { Gateway, Wallets } = require('fabric-network');
 const fs = require('fs');
 const path = require('path');
 
+// * OTIMIZAÇÃO: Cache do Connection Profile em memória para evitar leitura de disco repetitiva
+let cachedCCP = null;
+
 class FabricConnector {
     constructor() {
         this.gateway = null;
@@ -21,14 +24,19 @@ class FabricConnector {
                 throw new Error(`Identidade "${userId}" não encontrada na carteira.`);
             }
 
-            const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-profile.json');
-            if (!fs.existsSync(ccpPath)) {
-                throw new Error(`Perfil de conexão não encontrado em ${ccpPath}`);
+            // * OTIMIZAÇÃO: Ler CCP apenas se ainda não estiver em cache
+            if (!cachedCCP) {
+                const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-profile.json');
+                if (!fs.existsSync(ccpPath)) {
+                    throw new Error(`Perfil de conexão não encontrado em ${ccpPath}`);
+                }
+                cachedCCP = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
             }
-            const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
 
             this.gateway = new Gateway();
-            await this.gateway.connect(ccp, {
+            
+            // Reutiliza o cachedCCP
+            await this.gateway.connect(cachedCCP, {
                 wallet,
                 identity: userId,
                 discovery: { enabled: true, asLocalhost: true }

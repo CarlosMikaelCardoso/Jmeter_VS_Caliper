@@ -2,7 +2,7 @@
 set -o errexit   # Aborta a execução se um comando falhar
 set -o nounset   # Aborta a execução se uma variável não definida for usada
 set -o pipefail  # Aborta se algum comando em um pipeline falhar
-set -x           # Modo de depuração: imprime cada comando antes de executá-lo
+# set -x         # Modo de depuração (descomente se precisar debugar)
 
 # Pega o diretório onde o script está rodando (pasta scripts/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,41 +23,36 @@ function install_dependencies(){
     sudo snap install docker 
     
     # ---------------------------------------------------------
-    # MODIFICAÇÃO: Correção específica para Docker via SNAP
-    # Garante que o serviço iniciou e libera permissão no socket
-    echo "Configurando permissões do Docker (Snap)..."
+    # * OTIMIZAÇÃO: Inicialização robusta do Docker (Wait-for-it pattern)
+    echo "Iniciando Docker (Snap)..."
     sudo snap start docker || true
-    sleep 5 # Aguarda o daemon subir completamente
     
-    # Esta linha resolve o 'permission denied' forçando acesso de leitura/escrita
-    if [ -e /var/run/docker.sock ]; then
-        sudo chmod 666 /var/run/docker.sock
-    else
-        echo "Aviso: Socket /var/run/docker.sock não encontrado. O Docker pode não estar rodando."
-    fi
-    # ---------------------------------------------------------
-
-    # Adiciona o usuário ao grupo docker se necessário
-    if ! groups "$USER" | grep -q '\bdocker\b'; then
-        sudo useradd docker 
-        sudo usermod -aG docker "$USER"
-    fi
-
-    # Verifica conectividade com o daemon
-    if ! docker info >/dev/null 2>&1; then
-        echo "Aviso: Ainda não foi possível conectar ao daemon Docker."
-        echo "Tentando forçar permissão novamente..."
-        sudo chmod 666 /var/run/docker.sock
-        
-        if ! docker info >/dev/null 2>&1; then
-            echo "ERRO CRÍTICO: Docker inacessível. Abortando."
+    echo "Aguardando Docker daemon estar pronto..."
+    local timeout=30
+    local counter=0
+    while ! docker info >/dev/null 2>&1; do
+        if [ $counter -ge $timeout ]; then
+            echo "ERRO CRÍTICO: Timeout aguardando Docker iniciar."
             exit 1
         fi
+        echo "Aguardando Docker... ($counter/$timeout s)"
+        sleep 1
+        ((counter++))
+    done
+    echo "Docker está rodando!"
+
+    # Adiciona o usuário ao grupo docker se necessário (Segurança)
+    if ! groups "$USER" | grep -q '\bdocker\b'; then
+        echo "Adicionando usuário $USER ao grupo docker..."
+        sudo useradd docker || true
+        sudo usermod -aG docker "$USER"
+        echo "AVISO: Talvez seja necessário fazer logoff/login para aplicar as permissões de grupo."
     fi
 
     # Mostra versões
     docker --version || true
     docker compose version || true
+    
     # Instala Node.js 20
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
     sudo apt-get install -y nodejs build-essential
@@ -77,9 +72,6 @@ function network_down(){
 function network_creation(){
     local qtd_orderers=$1  # Recebe a quantidade de orderers passada pela main
     
-    # Script para instalar o Hyperledger Fabric
-    # curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh && \
-    # chmod +x install-fabric.sh && \
     cd "$NETWORK_DIR" || exit
     # Se o install-fabric.sh estiver dentro de network/
     if [ -f "./install-fabric.sh" ]; then
@@ -148,7 +140,7 @@ function cleanup(){
 main() {
     local orderers=${1:-5}
 
-    # install_dependencies # (Opcional se já tiver instalado)
+    install_dependencies
     cleanup
     network_down
     network_creation "$orderers"
