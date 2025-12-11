@@ -75,7 +75,7 @@ function network_creation(){
     cd "$NETWORK_DIR" || exit
     # Se o install-fabric.sh estiver dentro de network/
     if [ -f "./install-fabric.sh" ]; then
-        ./install-fabric.sh docker binary --fabric-version 2.5.9
+        ./install-fabric.sh docker binary --fabric-version '2.5.9'
     fi
     
     cd ./test-network || exit
