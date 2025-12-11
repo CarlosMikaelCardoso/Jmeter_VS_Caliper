@@ -186,7 +186,9 @@ run_test_and_monitor() {
     # Passa csvDataFile apontando para RESULTS_DIR onde os CSVs foram gerados
     "${JMETER_BIN}" -n -t "$JMX_FILE" -l "$JTL_FILE" \
         -JcsvDataFile="${CSV_FILE_PATH}" \
-        -JapiHost="$API_HOST"
+        -JapiHost="$API_HOST" \
+        -JnumUsers="$NUM_USERS" \
+        -JloopCount="$OPEN_LOOPS" 
 
     # Para Monitoramento
     curl -s -X POST -H "Content-Type: application/json" \

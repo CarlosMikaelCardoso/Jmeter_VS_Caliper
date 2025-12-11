@@ -19,6 +19,9 @@
 
     # O usuário na wallet que a API usará
     export API_USER="admin"
+
+    # Numero de Workers da API
+    export API_WORKERS=15
 ```
 
 # 4 - Iniciando a API

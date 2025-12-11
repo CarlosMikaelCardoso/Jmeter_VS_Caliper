@@ -40,7 +40,7 @@ caliper_setup() {
         npm install --save-dev @hyperledger/caliper-cli
     fi
 
-    echo "Executando 'caliper bind' para Fabric 2.4..."
+    echo "Executando 'caliper bind' para Fabric 2.5..."
     npx caliper bind --caliper-bind-sut fabric:2.5
 }
 
@@ -49,9 +49,15 @@ caliper_setup() {
 run_caliper_test() {
     local ROUND_NAME=$1
     local CONFIG_FILE="${BENCHMARK_DIR}/$2"
+    local TEMP_CONFIG_FILE="${BENCHMARK_DIR}/temp-${2}"
     local RUN_NUMBER=$3
     local ROUND_LABEL_LOWER=$(echo "$ROUND_NAME" | tr '[:upper:]' '[:lower:]')
     local LOG_FILE="${RESULTS_DIR}/caliper_log_${ROUND_LABEL_LOWER}_run_${RUN_NUMBER}.txt"
+
+    echo "--- Configurando Workers para ${NUM_WORKERS} usuários ---"
+    # Cria um arquivo temporário substituindo o número de workers usando regex
+    # Assume que no YAML existe "number: X" dentro de workers
+    sed "s/number: [0-9]*/number: ${NUM_WORKERS}/" "${CONFIG_FILE}" > "${TEMP_CONFIG_FILE}"
 
     echo "--- [Run ${RUN_NUMBER}] Iniciando Benchmark: ${ROUND_NAME} ---"
     
@@ -68,10 +74,13 @@ run_caliper_test() {
     npx caliper launch manager \
         --caliper-workspace "${PROJECT_ROOT}" \
         --caliper-networkconfig "${BENCHMARK_DIR}/network-config.yaml" \
-        --caliper-benchconfig "${CONFIG_FILE}" \
+        --caliper-benchconfig "${TEMP_CONFIG_FILE}" \
         --caliper-fabric-gateway-enabled \
         --caliper-report-path "${RESULTS_DIR}/report-${ROUND_LABEL_LOWER}.html" \
         > "${LOG_FILE}" 2>&1
+
+    # Remove o arquivo temporário após o uso
+    rm "${TEMP_CONFIG_FILE}"
 
     # Para Monitoramento
     curl -s -X POST -H "Content-Type: application/json" \
@@ -84,6 +93,9 @@ run_caliper_test() {
 }
 
 main() {
+    # Captura o número de usuários do primeiro argumento, padrão é 5 se não informado
+    NUM_WORKERS=${1:-5}
+
     cleanup
     caliper_setup
 
