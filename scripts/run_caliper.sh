@@ -41,7 +41,7 @@ caliper_setup() {
     fi
 
     echo "Executando 'caliper bind' para Fabric 2.4..."
-    npx caliper bind --caliper-bind-sut fabric:2.4
+    npx caliper bind --caliper-bind-sut fabric:2.5
 }
 
 # --- EXECUÇÃO DO TESTE ---
