@@ -187,18 +187,6 @@ func (t *SimpleChaincode) Transfer(stub shim.ChaincodeStubInterface, args []stri
 	return shim.Success(nil)
 }
 
-func (s *SmartContract) DeleteAccount(ctx contractapi.TransactionContextInterface, accountID string) error {
-    exists, err := s.AccountExists(ctx, accountID)
-    if err != nil {
-        return err
-    }
-    if !exists {
-        return fmt.Errorf("the account %s does not exist", accountID)
-    }
-
-    return ctx.GetStub().DelState(accountID)
-}
-
 
 func  main()  {
 	err := shim.Start(new(SimpleChaincode))
