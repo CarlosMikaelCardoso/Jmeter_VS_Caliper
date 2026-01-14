@@ -14,6 +14,12 @@
 
 'use strict';
 
+// ______________________________________________________________________
+// MODIFICADO: Imports necessários para ler o arquivo de rodada
+const fs = require('fs');
+const path = require('path');
+// ______________________________________________________________________
+
 const Dictionary = 'abcdefghijklmnopqrstuvwxyz';
 
 /**
@@ -28,7 +34,26 @@ class SimpleState {
         this.accountsGenerated = accounts;
         this.initialMoney = initialMoney;
         this.moneyToTransfer = moneyToTransfer;
-        this.accountPrefix = this._get26Num(workerIndex);
+
+        // ______________________________________________________________________
+        // MODIFICADO: Lê o arquivo current_round.txt para obter o ID da rodada
+        let roundId = '0';
+        try {
+            // O arquivo deve estar na pasta 'benchmarks/caliper_fabric', que é '..' relativo a 'utils'
+            const roundFilePath = path.join(__dirname, '..', 'current_round.txt');
+            
+            if (fs.existsSync(roundFilePath)) {
+                roundId = fs.readFileSync(roundFilePath, 'utf8').trim();
+            }
+        } catch (e) {
+            console.log('Aviso: Não foi possível ler current_round.txt, assumindo rodada 0. Erro:', e.message);
+        }
+
+        // Gera um prefixo único e legível. 
+        // Ex: "w0_r1_" -> Worker 0, Rodada 1.
+        // Isso garante que as chaves nunca colidam entre rodadas diferentes.
+        this.accountPrefix = `w${workerIndex}_r${roundId}_`;
+        // ______________________________________________________________________
     }
 
     /**
@@ -55,6 +80,7 @@ class SimpleState {
      * @private
      */
     _getAccountKey(index) {
+        // Agora usamos o prefixo robusto + a conversão alfabética do índice
         return this.accountPrefix + this._get26Num(index);
     }
 

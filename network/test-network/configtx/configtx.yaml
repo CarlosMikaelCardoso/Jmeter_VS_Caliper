@@ -83,6 +83,9 @@ Orderer: &OrdererDefaults
     Addresses:
         - orderer.example.com:7050
         - orderer2.example.com:7060
+        - orderer3.example.com:7070
+        - orderer4.example.com:7080
+        - orderer5.example.com:7090
 
     EtcdRaft:
         Consenters:
@@ -95,6 +98,18 @@ Orderer: &OrdererDefaults
           Port: 7060
           ClientTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer2.example.com/tls/server.crt
           ServerTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer2.example.com/tls/server.crt
+        - Host: orderer3.example.com
+          Port: 7070
+          ClientTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer3.example.com/tls/server.crt
+          ServerTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer3.example.com/tls/server.crt
+        - Host: orderer4.example.com
+          Port: 7080
+          ClientTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer4.example.com/tls/server.crt
+          ServerTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer4.example.com/tls/server.crt
+        - Host: orderer5.example.com
+          Port: 7090
+          ClientTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer5.example.com/tls/server.crt
+          ServerTLSCert: ../organizations/ordererOrganizations/example.com/orderers/orderer5.example.com/tls/server.crt
 
     BatchTimeout: 2s
     BatchSize:

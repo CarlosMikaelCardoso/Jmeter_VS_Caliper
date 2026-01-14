@@ -16,6 +16,7 @@ MONITOR_API_URL="http://localhost:3002"
 mkdir -p "${RESULTS_DIR}"
 
 # --- FUNÇÃO DE LIMPEZA ---
+# (Desativada para permitir acumular relatórios de várias rodadas)
 cleanup() {
     echo "--- Limpando relatórios antigos em ${RESULTS_DIR} ---"
     rm -rf "${RESULTS_DIR}"
@@ -53,7 +54,6 @@ calculate_tx_params() {
     # Base Total (para Open e Query)
     TOTAL_TX=$((WORKERS * LOOPS_PER_WORKER))
     
-    # O valor será ajustado dentro da função de execução para Transfer
     echo "--- Configuração Base ---"
     echo "Workers: ${WORKERS} | Base Total Tx: ${TOTAL_TX}"
 }
@@ -70,6 +70,11 @@ run_caliper_test() {
     # Calcula carga base
     calculate_tx_params "${NUM_WORKERS}"
     
+    # ______________________________________________________________________
+    # MODIFICADO: Escreve o ID da rodada em arquivo físico para o Node.js ler
+    echo "${RUN_NUMBER}" > "${BENCHMARK_DIR}/current_round.txt"
+    # ______________________________________________________________________
+
     # ______________________________________________________________________
     # MODIFICADO: Reduz carga se for Transfer
     local ACTUAL_TX=${TOTAL_TX}
@@ -119,23 +124,26 @@ run_caliper_test() {
 
 main() {
     NUM_WORKERS=${1:-5}
-    cleanup
+    # O segundo argumento agora é o GLOBAL_RUN_ID vindo do orquestrador
+    GLOBAL_RUN_ID=${2:-1}
+
+    # cleanup <-- Comentado para preservar histórico
     caliper_setup
 
-    local RUN_NUMBER=1
-    
-    run_caliper_test "Open" "config-open.yaml" ${RUN_NUMBER}
-    run_caliper_test "Query" "config-query.yaml" ${RUN_NUMBER}
-    run_caliper_test "Transfer" "config-transfer.yaml" ${RUN_NUMBER}
+    # Passa o GLOBAL_RUN_ID para as funções de teste
+    run_caliper_test "Open" "config-open.yaml" ${GLOBAL_RUN_ID}
+    run_caliper_test "Query" "config-query.yaml" ${GLOBAL_RUN_ID}
+    run_caliper_test "Transfer" "config-transfer.yaml" ${GLOBAL_RUN_ID}
 
-    echo "--- Gerando gráficos consolidados ---"
+    echo "--- Gerando gráficos consolidados (Opcional nesta fase) ---"
     if [ -f "$GENERATE_GRAPHS_SCRIPT" ]; then
-        python3 "$GENERATE_GRAPHS_SCRIPT" "${RESULTS_DIR}" 1
+        # Pode ajustar para rodar apenas no final de tudo se preferir
+        python3 "$GENERATE_GRAPHS_SCRIPT" "${RESULTS_DIR}" 1 || true
     else
         echo "Aviso: Script de gráficos não encontrado."
     fi
     
-    echo "--- Testes Concluídos! Resultados em: ${RESULTS_DIR} ---"
+    echo "--- Rodada ${GLOBAL_RUN_ID} Concluída! Resultados em: ${RESULTS_DIR} ---"
 }
 
 main "$@"
