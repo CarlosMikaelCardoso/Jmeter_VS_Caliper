@@ -91,7 +91,7 @@ generate_accounts_csv() {
     
     # Transfer Loops define quantas transações. 
     # Para evitar MVCC, precisamos de contas suficientes.
-    TRANSFER_LOOPS=$((OPEN_LOOPS / 10))
+    TRANSFER_LOOPS=$((OPEN_LOOPS / 2))
     if [ "$TRANSFER_LOOPS" -lt 1 ]; then TRANSFER_LOOPS=1; fi
 
     echo "Configuração: Users=$NUM_USERS | Open/Query Loops=$OPEN_LOOPS | Transfer Loops=$TRANSFER_LOOPS"
@@ -200,7 +200,7 @@ run_test_and_monitor() {
 
 # --- MAIN ---
 echo "--- Preparando Teste JMeter ---"
-cleanup
+# cleanup
 generate_accounts_csv # Define as variáveis OPEN_LOOPS e TRANSFER_LOOPS
 
 # Limpa erros da API
