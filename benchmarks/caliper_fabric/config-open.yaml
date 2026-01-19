@@ -7,7 +7,7 @@ test:
   name: simple-open
   description: Rodada de Open (Abertura de Contas)
   workers:
-    number: 1
+    number: 5
   rounds:
     - label: open
       description: Teste de abertura de contas.

@@ -7,7 +7,7 @@ test:
   name: simple-transfer 
   description: Rodada de Transfer (Transferência de Contas) 
   workers:
-    number: 1
+    number: 5
   rounds:
     - label: transfer
       description: Teste de performance de transferência. 
@@ -15,7 +15,7 @@ test:
       rateControl:
         type: fixed-rate
         opts:
-          tps: 5 
+          tps: 50 
       workload:
         module: benchmarks/caliper_fabric/transfer.js
         arguments: *simple-args

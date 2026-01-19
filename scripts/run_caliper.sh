@@ -70,22 +70,18 @@ run_caliper_test() {
     # Calcula carga base
     calculate_tx_params "${NUM_WORKERS}"
     
-    # ______________________________________________________________________
-    # MODIFICADO: Escreve o ID da rodada em arquivo físico para o Node.js ler
+    # Escreve o ID da rodada em arquivo físico para o Node.js ler
     echo "${RUN_NUMBER}" > "${BENCHMARK_DIR}/current_round.txt"
-    # ______________________________________________________________________
 
-    # ______________________________________________________________________
-    # MODIFICADO: Reduz carga se for Transfer
+    # Reduz carga se for Transfer
     local ACTUAL_TX=${TOTAL_TX}
     
     if [ "$ROUND_NAME" == "Transfer" ]; then
-        ACTUAL_TX=$((TOTAL_TX / 10))
+        ACTUAL_TX=$((TOTAL_TX / 2))
         # Garante que seja pelo menos 1
         if [ "$ACTUAL_TX" -lt 1 ]; then ACTUAL_TX=1; fi
         echo ">>> Modo TRANSFER detectado: Reduzindo carga para ${ACTUAL_TX} transações."
     fi
-    # ______________________________________________________________________
 
     echo "--- [Run ${RUN_NUMBER}] Iniciando Benchmark: ${ROUND_NAME} ---"
     

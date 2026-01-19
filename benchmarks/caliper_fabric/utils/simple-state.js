@@ -35,8 +35,7 @@ class SimpleState {
         this.initialMoney = initialMoney;
         this.moneyToTransfer = moneyToTransfer;
 
-        // ______________________________________________________________________
-        // MODIFICADO: Lê o arquivo current_round.txt para obter o ID da rodada
+        // Lê o arquivo current_round.txt para obter o ID da rodada
         let roundId = '0';
         try {
             // O arquivo deve estar na pasta 'benchmarks/caliper_fabric', que é '..' relativo a 'utils'
@@ -53,7 +52,6 @@ class SimpleState {
         // Ex: "w0_r1_" -> Worker 0, Rodada 1.
         // Isso garante que as chaves nunca colidam entre rodadas diferentes.
         this.accountPrefix = `w${workerIndex}_r${roundId}_`;
-        // ______________________________________________________________________
     }
 
     /**
