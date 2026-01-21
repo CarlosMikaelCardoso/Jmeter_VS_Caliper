@@ -61,7 +61,7 @@
                 <boolProp name="HTTPArgument.always_encode">false</boolProp>
                 <stringProp name="Argument.value">{
                   "accountId": "${accountId}",
-                  "amount": 10000
+                  "amount": 1000000000000000
                 }</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>

@@ -74,97 +74,68 @@ JMX_TRANSFER="${BENCHMARK_DIR}/test_round3_transfer.jmx"
 
 # --- CÁLCULO DE LOOPS E GERAÇÃO DE DADOS ---
 generate_accounts_csv() {
-    echo "Gerando massa de dados (CSVs) SEM CONFLITOS MVCC..."
+    # No contexto do Wrapper, NUM_REPETITIONS é o ID da Rodada atual
+    local ROUND_ID="${NUM_REPETITIONS}"
     
-    # Define loops para Open/Query e reduz para Transfer
-    if [ "$NUM_USERS" -eq 5 ]; then
-        OPEN_LOOPS=200;
-    elif [ "$NUM_USERS" -eq 10 ]; then
-        OPEN_LOOPS=100;
-    elif [ "$NUM_USERS" -eq 25 ]; then
-        OPEN_LOOPS=40;
-    elif [ "$NUM_USERS" -eq 50 ]; then
-        OPEN_LOOPS=20;
-    else
-        OPEN_LOOPS=200;
-    fi
-    
-    # Transfer Loops define quantas transações. 
-    # Para evitar MVCC, precisamos de contas suficientes.
-    TRANSFER_LOOPS=$((OPEN_LOOPS / 2))
-    if [ "$TRANSFER_LOOPS" -lt 1 ]; then TRANSFER_LOOPS=1; fi
+    echo "--- [Data Gen] Gerando CSVs para Rodada Global ${ROUND_ID} ---"
 
-    echo "Configuração: Users=$NUM_USERS | Open/Query Loops=$OPEN_LOOPS | Transfer Loops=$TRANSFER_LOOPS"
-    
-    # Total de contas criadas
-    local NUMBER_OF_ACCOUNTS=$((NUM_USERS * OPEN_LOOPS))
-    
-    local accounts_file="${RESULTS_DIR}/all_accounts.txt"
-    local open_csv="${RESULTS_DIR}/open_accounts.csv"
-    local transfer_csv="${RESULTS_DIR}/transfer_accounts.csv"
+    # Define cargas (Mantendo sua lógica original)
+    local BASE_LOOPS=100
+    if [ "$NUM_USERS" -eq 5 ]; then BASE_LOOPS=200; fi
+    if [ "$NUM_USERS" -eq 10 ]; then BASE_LOOPS=100; fi
+    if [ "$NUM_USERS" -eq 20 ]; then BASE_LOOPS=50; fi
 
-    pushd "${RESULTS_DIR}" > /dev/null
-    node -e "
-        const fs = require('fs');
-        const DICTIONARY = 'abcdefghijklmnopqrstuvwxyz';
-        function get26Num(n) { let result = ''; while(n >= 0) { result = DICTIONARY.charAt(n % DICTIONARY.length) + result; n = Math.floor(n / DICTIONARY.length) - 1; } return result; }
+    # Exporta variáveis para o JMeter
+    export OPEN_LOOPS=$BASE_LOOPS
+    export TRANSFER_LOOPS=$((BASE_LOOPS / 2))
+    if [ "$TRANSFER_LOOPS" -lt 1 ]; then export TRANSFER_LOOPS=1; fi
+    export CURRENT_LOOPS=$OPEN_LOOPS 
+
+    # Limpa arquivos antigos na pasta de resultados
+    rm -f "${RESULTS_DIR}"/open_accounts*.csv "${RESULTS_DIR}"/transfer_accounts*.csv
+
+    echo "   -> Gerando arquivos individuais por Thread (${NUM_USERS} threads)..."
+
+    # Loop para gerar um arquivo separado para CADA thread (Worker)
+    for (( thread=1; thread<=NUM_USERS; thread++ ))
+    do
+        local OPEN_THREAD_FILE="${RESULTS_DIR}/open_accounts_thread_${thread}.csv"
+        local TRANSFER_THREAD_FILE="${RESULTS_DIR}/transfer_accounts_thread_${thread}.csv"
         
-        const numAccounts = ${NUMBER_OF_ACCOUNTS};
-        const numUsers = ${NUM_USERS};
-        const accountsPerThread = Math.floor(numAccounts / numUsers);
-        
-        let totalAccounts = [];
-        let accIndex = 0;
+        # Prefixo base para esta thread nesta rodada: r1_user1_
+        local THREAD_PREFIX="r${ROUND_ID}_user${thread}_"
 
-        // 1. Gera contas para Open e Query (Distribuído por thread)
-        for (let t = 1; t <= numUsers; t++) {
-            const threadAccs = [];
-            for (let i = 0; i < accountsPerThread; i++) {
-                const acc = 'userJmeter' + get26Num(accIndex++);
-                threadAccs.push(acc);
-                totalAccounts.push(acc);
+        # 1. Gera contas para esta thread (1 até 200)
+        # Formato: r1_user1_1, r1_user1_2 ...
+        awk -v prefix="$THREAD_PREFIX" -v loops="$OPEN_LOOPS" 'BEGIN {
+            for(i=1; i<=loops; i++) {
+                print prefix i ",1000000000000000"
             }
-            fs.writeFileSync('open_accounts_thread_' + t + '.csv', 'accountId\n' + threadAccs.join('\n'));
-        }
-        
-        // CSV Global
-        fs.writeFileSync('${open_csv}', 'accountId\n' + totalAccounts.join('\n'));
-        fs.writeFileSync('${accounts_file}', totalAccounts.join('\n'));
-        
-        // 2. GERAÇÃO DE TRANSFERÊNCIAS (ESTRATÉGIA SEM COLISÃO)
-        // Divide as contas em duas metades: Remetentes (primeira metade) e Destinatários (segunda metade)
-        // Isso garante que uma conta nunca seja remetente e destinatária ao mesmo tempo
-        
-        const midPoint = Math.floor(totalAccounts.length / 2);
-        const senders = totalAccounts.slice(0, midPoint);
-        const receivers = totalAccounts.slice(midPoint, totalAccounts.length);
-        
-        const transferPairs = [];
-        
-        // Pareia Sender[i] com Receiver[i].
-        // Como a lista é sequencial e única, nunca haverá colisão de chaves (MVCC)
-        // desde que o número de transferências não exceda o número de pares únicos disponíveis.
-        
-        const maxUniquePairs = Math.min(senders.length, receivers.length);
-        const requestedTransfers = ${NUM_USERS} * 200; // Gera excedente para garantir
-        
-        let pairIndex = 0;
-        for(let i=0; i < requestedTransfers; i++) {
-            // Se acabar os pares únicos, volta ao início (aí sim pode ter MVCC se o loop for muito rápido,
-            // mas com a carga reduzida do Transfer, isso é improvável)
-            if (pairIndex >= maxUniquePairs) pairIndex = 0;
-            
-            const src = senders[pairIndex];
-            const tgt = receivers[pairIndex];
-            
-            transferPairs.push(src + ',' + tgt);
-            pairIndex++;
-        }
-        
-        fs.writeFileSync('${transfer_csv}', 'source_account,target_account\n' + transferPairs.join('\n'));
-        console.log('Gerados ' + transferPairs.length + ' pares de transferência (Estratégia Split-Set).');
-    "
-    popd > /dev/null
+        }' > "${OPEN_THREAD_FILE}"
+
+        # 2. Gera transferências para esta thread (1 até 100)
+        # O destino e a origem são escolhidos APENAS dentro das contas desta thread
+        # Isso elimina 100% dos conflitos MVCC entre threads diferentes.
+        awk -v prefix="$THREAD_PREFIX" -v acc_limit="$OPEN_LOOPS" -v tx_loops="$TRANSFER_LOOPS" 'BEGIN {
+            srand();
+            for(i=1; i<=tx_loops; i++) {
+                src = int(1 + rand() * acc_limit);
+                dst = int(1 + rand() * acc_limit);
+                
+                # Garante que não transfere para si mesmo
+                while(src == dst) {
+                    dst = int(1 + rand() * acc_limit);
+                }
+                print prefix src "," prefix dst ",10"
+            }
+        }' > "${TRANSFER_THREAD_FILE}"
+    done
+    
+    # Gera um arquivo unificado apenas para registro (opcional, o JMeter vai usar os _thread_X.csv)
+    cat "${RESULTS_DIR}"/open_accounts_thread_*.csv > "${RESULTS_DIR}/open_accounts.csv"
+    cat "${RESULTS_DIR}"/transfer_accounts_thread_*.csv > "${RESULTS_DIR}/transfer_accounts.csv"
+
+    echo "✅ Dados gerados: ${NUM_USERS} arquivos separados. Exemplo: r${ROUND_ID}_user1_1"
 }
 
 # --- EXECUÇÃO ---
