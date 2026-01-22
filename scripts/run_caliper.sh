@@ -27,12 +27,25 @@ cleanup() {
 caliper_setup() {
     echo "--- Verificando instalação do Caliper ---"
     cd "${PROJECT_ROOT}"
+    
+    # 1. Verifica se a CLI do Caliper já existe
     if ! npx --no-install caliper --version > /dev/null 2>&1; then
         echo "Instalando @hyperledger/caliper-cli..."
         npm install --save-dev @hyperledger/caliper-cli
+    else
+        echo "✅ Caliper CLI já instalado."
     fi
-    npx caliper bind --caliper-bind-sut fabric:2.5
+
+    # 2. Verifica se o SDK do Fabric já está vinculado (Bind)
+    # Verifica se a pasta do módulo existe para evitar 'npm install' desnecessário
+    if [ ! -d "node_modules/@hyperledger/fabric-gateway" ]; then
+        echo "Realizando Bind do Caliper para Fabric 2.5..."
+        npx caliper bind --caliper-bind-sut fabric:2.5
+    else
+        echo "✅ Bind do Fabric detectado (node_modules). Pulando instalação."
+    fi
 }
+
 
 # --- CÁLCULO DE TRANSAÇÕES ---
 calculate_tx_params() {

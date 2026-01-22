@@ -1,21 +1,22 @@
-#!/usr/bin/env bash
-set -o errexit
-set -o nounset
-set -o pipefail
+#!/bin/bash
 
 # Configurações
 TOTAL_ROUNDS=32
 WORKERS=5 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Caminhos
 RESULTS_DIR="${PROJECT_ROOT}/results/caliper_runs"
-CLIENT_MONITOR_DIR="${PROJECT_ROOT}/results/client_monitor"
+HOST_MONITOR_DIR="${RESULTS_DIR}/host_monitor"
+SETUP_NETWORK_SCRIPT="${SCRIPT_DIR}/setup_fabric_network.sh" 
+GENERATE_GRAPHS_SCRIPT="${SCRIPT_DIR}/generateGraphsCaliper.py"
 
-# Garante diretórios
+# Garante diretórios iniciais
 mkdir -p "${RESULTS_DIR}"
-mkdir -p "${CLIENT_MONITOR_DIR}"
+mkdir -p "${HOST_MONITOR_DIR}"
 
-echo ">>> INICIANDO BATERIA DE $TOTAL_ROUNDS RODADAS <<<"
+echo ">>> INICIANDO BATERIA DE $TOTAL_ROUNDS RODADAS (Caliper) <<<"
 
 for (( i=1; i<=TOTAL_ROUNDS; i++ ))
 do
@@ -24,48 +25,54 @@ do
     echo "   RODADA $i de $TOTAL_ROUNDS"
     echo "=================================================================="
 
-    # ______________________________________________________________________
-    # MODIFICADO: Removido o cleanLedger.js. 
-    # A unicidade dos dados é garantida pelo prefixo da rodada no simple-state.js
-    # ______________________________________________________________________
+    # (Reinicialização da rede desativada conforme solicitado)
+    # if [ -f "$SETUP_NETWORK_SCRIPT" ]; then ... fi
 
-    # 1. MONITORAMENTO DE HARDWARE (CLIENTE)
-    echo ">>> [Passo 1] Iniciando monitoramento de CPU do Cliente..."
-    CLIENT_LOG="${CLIENT_MONITOR_DIR}/client_cpu_round_${i}.log"
-    # Coleta em background a cada 1s
-    sar -u 1 > "${CLIENT_LOG}" &
+    # 1. MONITORAMENTO DE HARDWARE (Host)
+    HOST_LOG="${HOST_MONITOR_DIR}/host_cpu_round_${i}.log"
+    echo ">>> [Passo 1] Iniciando monitoramento..."
+    sar -u 1 > "$HOST_LOG" &
     MONITOR_PID=$!
 
-    # 2. EXECUÇÃO DO TESTE
-    echo ">>> [Passo 2] Executando Caliper..."
-    cd "${SCRIPT_DIR}"
-    
-    # Executa o script de teste passando WORKERS e o ID da RODADA
+    # 2. EXECUTAR CALIPER
+    # O script run_caliper.sh vai verificar dependências e pular instalação se já existirem
     ./run_caliper.sh $WORKERS $i
 
-    # 3. PARAR MONITORAMENTO
-    kill $MONITOR_PID || true
-    echo ">>> Monitoramento do Cliente salvo em: ${CLIENT_LOG}"
+    # 3. FINALIZAR MONITORAMENTO
+    kill $MONITOR_PID
+    echo ">>> [Passo 3] Monitoramento parado."
 
-    # 4. VALIDAÇÃO (SANITY CHECK - CLIENTE)
-    # Verifica se o 'idle' caiu abaixo de 10% (Uso > 90%)
-    LOW_IDLE=$(grep -v "Average" "${CLIENT_LOG}" | awk '{if($NF < 10.00) print $0}' | wc -l)
+    # --- ORGANIZAÇÃO DE PASTAS ---
+    echo ">>> [Passo 4] Organizando arquivos da rodada $i..."
     
-    if [ "$LOW_IDLE" -gt 0 ]; then
-        echo "⚠️  AVISO: A CPU do Cliente ultrapassou 90% de uso em ${LOW_IDLE} momentos nesta rodada!"
-        echo "   Verifique o arquivo ${CLIENT_LOG}"
-    else
-        echo "✅ CPU do Cliente OK (<90%)."
+    # Define e cria a pasta da rodada
+    ROUND_FOLDER="${RESULTS_DIR}/round_${i}"
+    mkdir -p "${ROUND_FOLDER}"
+
+    # Move os relatórios HTML
+    mv "${RESULTS_DIR}"/report-*.html "${ROUND_FOLDER}/" 2>/dev/null || true
+    
+    # Move os logs de execução e stats do Docker
+    mv "${RESULTS_DIR}"/*.log "${ROUND_FOLDER}/" 2>/dev/null || true
+    mv "${RESULTS_DIR}"/*.json "${ROUND_FOLDER}/" 2>/dev/null || true
+
+    # (Opcional) Move o log de CPU do host para ficar junto
+    if [ -f "$HOST_LOG" ]; then
+        mv "$HOST_LOG" "${ROUND_FOLDER}/"
     fi
 
-    # 5. ORGANIZAÇÃO DE ARTEFATOS
-    # Renomeia os relatórios HTML para evitar sobrescrita
-    mv "${RESULTS_DIR}/report-open.html" "${RESULTS_DIR}/report_open_round_${i}.html" || true
-    mv "${RESULTS_DIR}/report-query.html" "${RESULTS_DIR}/report_query_round_${i}.html" || true
-    mv "${RESULTS_DIR}/report-transfer.html" "${RESULTS_DIR}/report_transfer_round_${i}.html" || true
+    echo "✅ Arquivos movidos para: ${ROUND_FOLDER}"
 
-    echo "✅ Rodada $i concluída."
-    sleep 5 # Pausa para resfriamento/estabilização
+    # --- GERAÇÃO DE GRÁFICOS DA RODADA (NOVIDADE) ---
+    echo ">>> [Passo 5] Gerando gráficos exclusivos desta rodada..."
+    if [ -f "$GENERATE_GRAPHS_SCRIPT" ]; then
+        # Passamos APENAS a pasta desta rodada para o script Python
+        python3 "$GENERATE_GRAPHS_SCRIPT" "${ROUND_FOLDER}"
+        echo "📊 Gráficos gerados em: ${ROUND_FOLDER}/graphs"
+    fi
+
+    sleep 2
 done
 
-echo ">>> BATERIA DE TESTES FINALIZADA <<<"
+echo ">>> BATERIA CALIPER CONCLUÍDA <<<"
+echo "Para gerar o comparativo final, execute: ./generate_final_report.sh"

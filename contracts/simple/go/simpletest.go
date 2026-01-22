@@ -88,7 +88,8 @@ func (t *SimpleChaincode) Open(stub shim.ChaincodeStubInterface, args []string) 
          return jsonError(300, fmt.Sprintf("system error: %s", err.Error()))
     }
     if existingBytes != nil {
-        return jsonError(302, "account already exists") // * Código mais limpo
+        fmt.Printf("Account %s already exists. Skipping.\n", account)
+        return shim.Success(nil)
     }
 
 	_,err = strconv.Atoi(args[1])

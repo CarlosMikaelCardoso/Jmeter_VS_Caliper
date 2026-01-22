@@ -17,7 +17,7 @@ const app = express();
 const port = 3000;
 app.use(express.json());
 
-const CHANNEL_NAME = process.env.CHANNEL_NAME || 'mychannel';
+const CHANNEL_NAME = process.env.CHANNEL_NAME || 'gercom';
 const CHAINCODE_NAME = process.env.CHAINCODE_NAME || 'simple';
 const API_USER = process.env.API_USER || 'admin';
 const NUM_WORKERS = parseInt(process.env.API_WORKERS || '5', 10);
@@ -79,8 +79,15 @@ app.post('/open-async', (req, res) => {
             console.log(`[OPEN] Sucesso: Conta ${accountId} | Latência Fabric: ${response.latency_ms}ms`);
             
         } catch (e) {
-            console.error(`[OPEN] Erro Background: ${e.message}`);
-            logBackendError("Open", runNumber, "GENERIC_ERROR");
+            // * MODIFICAÇÃO: Tratamento para ignorar erro de conta existente
+            // * Linha ~83: Verifica se a mensagem de erro contém "account already exists"
+            if (e.message && e.message.includes("account already exists")) {
+                console.log(`[OPEN] Aviso: Conta ${accountId} já existe (Ignorado).`);
+            } else {
+                // - Linha ~86: Mantém o log de erro para outros casos
+                console.error(`[OPEN] Erro Background: ${e.message}`);
+                logBackendError("Open", runNumber, "GENERIC_ERROR");
+            }
         } finally {
             pendingTransactions--;
         }
@@ -98,25 +105,51 @@ app.post('/transfer-async', (req, res) => {
     // 1. Responde IMEDIATAMENTE ao JMeter
     res.status(202).json({ status: "Accepted", message: "Processing" });
 
-    // 2. Processa em Background
+    // 2. Processa em Background com RETRY PROGRESSIVO (Backoff)
     (async () => {
-        try {
-            const worker = getNextWorker();
-            // * RESTAURADO: Captura a resposta
-            const response = await worker.workloads.transfer.submitTransaction(from, to, amount);
-            
-            // * RESTAURADO: Log de sucesso com latência
-            console.log(`[TRANSFER] Sucesso: ${from}->${to} | Latência Fabric: ${response.latency_ms}ms`);
-            
-        } catch (e) {
-            const msg = e.message || "";
-            // Logamos o erro no terminal também para você ver acontecendo
-            console.error(`[TRANSFER] Erro: ${msg}`);
-            
-            let type = "GENERIC_ERROR";
-            if (msg.includes("MVCC_READ_CONFLICT")) type = "MVCC_CONFLICT";
-            
-            logBackendError("Transfer", runNumber, type);
+        const MAX_RETRIES = 20; // Aumentado para garantir a persistência
+        let attempt = 0;
+        let success = false;
+
+        while (attempt < MAX_RETRIES && !success) {
+            try {
+                const worker = getNextWorker();
+                
+                const response = await worker.workloads.transfer.submitTransaction(from, to, amount);
+                
+                console.log(`[TRANSFER] Sucesso: ${from}->${to} | Latência Fabric: ${response.latency_ms}ms`);
+                success = true; 
+                
+            } catch (e) {
+                const msg = e.message || "";
+                
+                if (msg.includes("MVCC_READ_CONFLICT")) {
+                    attempt++;
+                    if (attempt < MAX_RETRIES) {
+                        // * ESTRATÉGIA DE BACKOFF:
+                        // O tempo de espera aumenta a cada tentativa falhada.
+                        // Tentativa 1: ~600ms
+                        // Tentativa 5: ~3000ms (dá tempo de sobra para o bloco fechar)
+                        const baseWait = attempt * 600; 
+                        const jitter = Math.floor(Math.random() * 1000); // +0 a 1s de aleatoriedade
+                        const delay = baseWait + jitter;
+                        
+                        console.log(`[TRANSFER] MVCC (${from}->${to}). Tentativa ${attempt}/${MAX_RETRIES} aguardando ${delay}ms...`);
+                        
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue; 
+                    }
+                }
+
+                // Erro final (esgotou tentativas ou erro genérico)
+                console.error(`[TRANSFER] Erro Final: ${msg}`);
+                
+                let type = "GENERIC_ERROR";
+                if (msg.includes("MVCC_READ_CONFLICT")) type = "MVCC_CONFLICT";
+                
+                logBackendError("Transfer", runNumber, type);
+                break;
+            }
         }
     })();
 });
