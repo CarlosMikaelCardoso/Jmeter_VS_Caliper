@@ -35,7 +35,7 @@ ROUND_ID=${2:-1}
 ROUND_DIR="${BASE_RESULTS_DIR}/round_${ROUND_ID}"
 mkdir -p "${ROUND_DIR}"
 
-echo ">>> Configurando saída para: ${ROUND_DIR}"
+echo "[INFO] Configurando saída para: ${ROUND_DIR}"
 
 # --- FUNÇÕES DE SETUP ---
 
@@ -60,13 +60,15 @@ fi
 
 check_and_install_java
 
+
+# --- CAMINHOS DOS JMX (JMETER) ---
 JMX_OPEN="${BENCHMARK_DIR}/test_round1_open.jmx"
 JMX_QUERY="${BENCHMARK_DIR}/test_round2_query.jmx"
 JMX_TRANSFER="${BENCHMARK_DIR}/test_round3_transfer.jmx"
 
 # --- GERAÇÃO DE DADOS ---
 generate_accounts_csv() {
-    echo "--- [Data Gen] Gerando CSVs na pasta: round_${ROUND_ID} ---"
+    echo "[INFO] - [Data Gen] Gerando CSVs na pasta: round_${ROUND_ID}"
 
     local BASE_LOOPS=100
     if [ "$NUM_USERS" -eq 5 ]; then BASE_LOOPS=200; fi
@@ -116,7 +118,7 @@ run_test_and_monitor() {
     local JTL_FILE="${ROUND_DIR}/results_${ROUND_NAME,,}.jtl"
     local DOCKER_LOG="${ROUND_DIR}/docker_stats_${ROUND_NAME,,}.json"
 
-    echo "--- Executando: ${ROUND_NAME} (Rodada $RUN_NUMBER) ---"
+    echo "[RUN] Executando: ${ROUND_NAME} (Rodada $RUN_NUMBER)"
 
     curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": \"${RUN_NUMBER}\"}" \
@@ -136,7 +138,7 @@ run_test_and_monitor() {
 }
 
 # --- MAIN ---
-echo "--- Preparando Rodada $ROUND_ID (JMeter) ---"
+echo "[RUN] Preparando Rodada $ROUND_ID (JMeter)"
 generate_accounts_csv
 curl -s -X POST "http://${API_HOST}:${API_PORT}/errors/clear" > /dev/null
 
@@ -149,4 +151,4 @@ run_test_and_monitor "$JMX_QUERY" "Query" "$ROUND_ID" "${ROUND_DIR}/open_account
 # 3. TRANSFER (Usa prefixo da pasta round)
 run_test_and_monitor "$JMX_TRANSFER" "Transfer" "$ROUND_ID" "${ROUND_DIR}/transfer_accounts_thread_" "$TRANSFER_LOOPS"
 
-echo "✅ Rodada $ROUND_ID concluída. Resultados em: ${ROUND_DIR}"
+echo "[INFO] Rodada $ROUND_ID concluída. Resultados em: ${ROUND_DIR}"

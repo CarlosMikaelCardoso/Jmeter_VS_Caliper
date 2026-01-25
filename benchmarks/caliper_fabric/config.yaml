@@ -11,18 +11,18 @@ test:
   workers:
     number: 1
   rounds:
-    # - label: open
-    #   description: >-
-    #     Test description for the opening of an account through the deployed
-    #     contract.
-    #   txNumber: *number-of-accounts
-    #   rateControl:
-    #     type: fixed-rate
-    #     opts:
-    #       tps: 50
-    #   workload:
-    #     module: simple/open.js
-    #     arguments: *simple-args
+     - label: open
+       description: >-
+         Test description for the opening of an account through the deployed
+         contract.
+       txNumber: *number-of-accounts
+       rateControl:
+         type: fixed-rate
+         opts:
+           tps: 50
+       workload:
+         module: simple/open.js
+         arguments: *simple-args
     - label: query
       description: Test description for the query performance of the deployed contract.
       txNumber: *number-of-accounts

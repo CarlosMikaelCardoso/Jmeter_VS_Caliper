@@ -18,31 +18,31 @@ mkdir -p "${RESULTS_DIR}"
 # --- FUNÇÃO DE LIMPEZA ---
 # (Desativada para permitir acumular relatórios de várias rodadas)
 cleanup() {
-    echo "--- Limpando relatórios antigos em ${RESULTS_DIR} ---"
+    echo "[INFO] Limpando relatórios antigos em ${RESULTS_DIR}"
     rm -rf "${RESULTS_DIR}"
     mkdir -p "${RESULTS_DIR}"
 }
 
 # --- SETUP DO CALIPER ---
 caliper_setup() {
-    echo "--- Verificando instalação do Caliper ---"
+    echo "[INFO] Verificando instalação do Caliper"
     cd "${PROJECT_ROOT}"
     
     # 1. Verifica se a CLI do Caliper já existe
     if ! npx --no-install caliper --version > /dev/null 2>&1; then
-        echo "Instalando @hyperledger/caliper-cli..."
+        echo "[INFO] Instalando @hyperledger/caliper-cli..."
         npm install --save-dev @hyperledger/caliper-cli
     else
-        echo "✅ Caliper CLI já instalado."
+        echo "[INFO] Caliper CLI já instalado."
     fi
 
     # 2. Verifica se o SDK do Fabric já está vinculado (Bind)
     # Verifica se a pasta do módulo existe para evitar 'npm install' desnecessário
     if [ ! -d "node_modules/@hyperledger/fabric-gateway" ]; then
-        echo "Realizando Bind do Caliper para Fabric 2.5..."
+        echo "[INFO] Realizando Bind do Caliper para Fabric 2.5..."
         npx caliper bind --caliper-bind-sut fabric:2.5
     else
-        echo "✅ Bind do Fabric detectado (node_modules). Pulando instalação."
+        echo "[INFO] Bind do Fabric detectado (node_modules). Pulando instalação."
     fi
 }
 
@@ -67,8 +67,8 @@ calculate_tx_params() {
     # Base Total (para Open e Query)
     TOTAL_TX=$((WORKERS * LOOPS_PER_WORKER))
     
-    echo "--- Configuração Base ---"
-    echo "Workers: ${WORKERS} | Base Total Tx: ${TOTAL_TX}"
+    echo "[INFO] Configuração Base"
+    echo "[INFO] Workers: ${WORKERS} | Base Total Tx: ${TOTAL_TX}"
 }
 
 # --- EXECUÇÃO DO TESTE ---
@@ -93,10 +93,10 @@ run_caliper_test() {
         ACTUAL_TX=$((TOTAL_TX / 2))
         # Garante que seja pelo menos 1
         if [ "$ACTUAL_TX" -lt 1 ]; then ACTUAL_TX=1; fi
-        echo ">>> Modo TRANSFER detectado: Reduzindo carga para ${ACTUAL_TX} transações."
+        echo "[INFO] Modo TRANSFER detectado: Reduzindo carga para ${ACTUAL_TX} transações."
     fi
 
-    echo "--- [Run ${RUN_NUMBER}] Iniciando Benchmark: ${ROUND_NAME} ---"
+    echo "[RUN] [Run ${RUN_NUMBER}] Iniciando Benchmark: ${ROUND_NAME}"
     
     # Substitui Worker e TxNumber (considerando âncoras e normal)
     sed -e "s/number: [0-9]\+/number: ${NUM_WORKERS}/" \
@@ -111,7 +111,7 @@ run_caliper_test() {
 
     cd "${PROJECT_ROOT}"
     
-    echo "Executando Caliper... Logs em: ${LOG_FILE}"
+    echo "[RUN] Executando Caliper... Logs em: ${LOG_FILE}"
     npx caliper launch manager \
         --caliper-workspace "${PROJECT_ROOT}" \
         --caliper-networkconfig "${BENCHMARK_DIR}/network-config.yaml" \
@@ -144,15 +144,15 @@ main() {
     run_caliper_test "Query" "config-query.yaml" ${GLOBAL_RUN_ID}
     run_caliper_test "Transfer" "config-transfer.yaml" ${GLOBAL_RUN_ID}
 
-    echo "--- Gerando gráficos consolidados (Opcional nesta fase) ---"
+    echo "[INFO] Gerando gráficos consolidados"
     if [ -f "$GENERATE_GRAPHS_SCRIPT" ]; then
         # Pode ajustar para rodar apenas no final de tudo se preferir
         python3 "$GENERATE_GRAPHS_SCRIPT" "${RESULTS_DIR}" 1 || true
     else
-        echo "Aviso: Script de gráficos não encontrado."
+        echo "[ERRO] Script de gráficos não encontrado."
     fi
     
-    echo "--- Rodada ${GLOBAL_RUN_ID} Concluída! Resultados em: ${RESULTS_DIR} ---"
+    echo "[INFO] Rodada ${GLOBAL_RUN_ID} Concluída! Resultados em: ${RESULTS_DIR}"
 }
 
 main "$@"

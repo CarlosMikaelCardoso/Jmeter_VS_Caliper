@@ -4,7 +4,7 @@ const { Gateway, Wallets } = require('fabric-network');
 const fs = require('fs');
 const path = require('path');
 
-// * OTIMIZAÇÃO: Cache do Connection Profile em memória para evitar leitura de disco repetitiva
+// Cache do Connection Profile em memória para evitar leitura de disco repetitiva
 let cachedCCP = null;
 
 class FabricConnector {
@@ -15,7 +15,7 @@ class FabricConnector {
 
     async initialize(userId, channelName, chaincodeName) {
         try {
-            // console.log(`[Connector] Inicializando para ${userId}...`);
+            console.log(`[Connector] Inicializando para ${userId}...`);
             const walletPath = path.join(process.cwd(), 'wallet');
             const wallet = await Wallets.newFileSystemWallet(walletPath);
 
@@ -24,7 +24,7 @@ class FabricConnector {
                 throw new Error(`Identidade "${userId}" não encontrada na carteira.`);
             }
 
-            // * OTIMIZAÇÃO: Ler CCP apenas se ainda não estiver em cache
+            // Ler CCP apenas se ainda não estiver em cache
             if (!cachedCCP) {
                 const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-profile.json');
                 if (!fs.existsSync(ccpPath)) {
@@ -44,7 +44,7 @@ class FabricConnector {
 
             const network = await this.gateway.getNetwork(channelName);
             this.contract = network.getContract(chaincodeName);
-            // console.log(`[Connector] Conectado ao canal: ${channelName}`);
+            console.log(`[Connector] Conectado ao canal: ${channelName}`);
 
         } catch (error) {
             console.error(`Falha ao inicializar conector: ${error}`);

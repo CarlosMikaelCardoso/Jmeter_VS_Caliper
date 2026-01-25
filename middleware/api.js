@@ -39,17 +39,17 @@ function getNextWorker() {
     return worker;
 }
 
-// Função para registrar erro que aconteceu em background
+// Função para registrar erro que acontece em background
 function logBackendError(round, runNumber, errorDetail) {
     try {
         const logLine = `${round},${runNumber},1,${errorDetail}\n`;
         fs.appendFileSync(LOG_FILE_PATH, logLine);
     } catch (err) {
-        console.error("Falha ao salvar log de erro:", err.message);
+        console.error("[ERRO] Falha ao salvar log de erro:", err.message);
     }
 }
 
-// --- Endpoints Assíncronos (RÁPIDOS) ---
+// --- Endpoints Assíncronos ---
 
 app.post('/open-async', (req, res) => {
     const { accountId, amount } = req.body;
@@ -72,19 +72,19 @@ app.post('/open-async', (req, res) => {
     (async () => {
         try {
             const worker = getNextWorker();
-            // * RESTAURADO: Captura a resposta para pegar a latência
+            // Captura a resposta para pegar a latência
             const response = await worker.workloads.open.submitTransaction(accountId, amount);
             
-            // * RESTAURADO: Log de sucesso com latência
+            // Log de sucesso com latência
             console.log(`[OPEN] Sucesso: Conta ${accountId} | Latência Fabric: ${response.latency_ms}ms`);
             
         } catch (e) {
-            // * MODIFICAÇÃO: Tratamento para ignorar erro de conta existente
-            // * Linha ~83: Verifica se a mensagem de erro contém "account already exists"
+            // Tratamento para ignorar erro de conta existente
+            // Verifica se a mensagem de erro contém "account already exists"
             if (e.message && e.message.includes("account already exists")) {
                 console.log(`[OPEN] Aviso: Conta ${accountId} já existe (Ignorado).`);
             } else {
-                // - Linha ~86: Mantém o log de erro para outros casos
+                // Mantém o log de erro para outros casos
                 console.error(`[OPEN] Erro Background: ${e.message}`);
                 logBackendError("Open", runNumber, "GENERIC_ERROR");
             }
@@ -107,7 +107,7 @@ app.post('/transfer-async', (req, res) => {
 
     // 2. Processa em Background com RETRY PROGRESSIVO (Backoff)
     (async () => {
-        const MAX_RETRIES = 20; // Aumentado para garantir a persistência
+        const MAX_RETRIES = 20; 
         let attempt = 0;
         let success = false;
 
@@ -126,7 +126,7 @@ app.post('/transfer-async', (req, res) => {
                 if (msg.includes("MVCC_READ_CONFLICT")) {
                     attempt++;
                     if (attempt < MAX_RETRIES) {
-                        // * ESTRATÉGIA DE BACKOFF:
+                        // ESTRATÉGIA DE BACKOFF:
                         // O tempo de espera aumenta a cada tentativa falhada.
                         // Tentativa 1: ~600ms
                         // Tentativa 5: ~3000ms (dá tempo de sobra para o bloco fechar)
@@ -162,7 +162,7 @@ app.get('/query/:accountId', async (req, res) => {
         // Executa a transação
         const response = await worker.workloads.query.submitTransaction(req.params.accountId);
         
-        // --- DEPURAÇÃO ADICIONADA ---
+        // --- DEPURAÇÃO ---
         // Mostra no terminal o sucesso e a latência, igual ao Open/Transfer
         console.log(`[QUERY] Sucesso: Conta ${req.params.accountId} | Latência Fabric: ${response.latency_ms}ms`);
         
@@ -175,8 +175,7 @@ app.get('/query/:accountId', async (req, res) => {
         // Log de erro apenas no terminal para você ver
         console.error(`[QUERY] Erro: ${e.message}`);
         
-        // IMPORTANTE: Retornamos 500. O JMeter conta isso como falha automaticamente.
-        // Não usamos 'logBackendError' aqui para evitar duplicidade no gráfico.
+        // Retornamos 500. O JMeter conta isso como falha automaticamente.
         res.status(500).json({ error: e.message });
     }
 });
@@ -191,7 +190,7 @@ app.post('/errors/clear', (req, res) => {
 
 async function startServer() {
     try {
-        console.log(`Iniciando ${NUM_WORKERS} workers...`);
+        console.log(`[INFO] Iniciando ${NUM_WORKERS} workers...`);
         const logDir = path.dirname(LOG_FILE_PATH);
         if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
@@ -207,9 +206,9 @@ async function startServer() {
                 }
             });
         }
-        app.listen(port, () => console.log(`API Async rodando na porta ${port}`));
+        app.listen(port, () => console.log(`[INFO] API Async rodando na porta ${port}`));
     } catch (e) {
-        console.error("Erro fatal:", e);
+        console.error("[ERRO] Erro fatal:", e);
         process.exit(1);
     }
 }

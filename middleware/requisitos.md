@@ -4,27 +4,13 @@
     npm install
 ```
 
-# 2 - Enrolando o Admin da Organização
+# 2 - Definindo o número de workers
 ```bash
-    npm run enrollAdmin
-``` 
-
-# 3 - Definindo Variáveis de Ambiente
-```bash
-    # O canal do seu chaincode (ex: gercom)
-    export CHANNEL_NAME="gercom"
-
-    # O nome do chaincode (ex: simple)
-    export CHAINCODE_NAME="simple"
-
-    # O usuário na wallet que a API usará
-    export API_USER="admin"
-
     # Numero de Workers da API
-    export API_WORKERS=15
+    export API_WORKERS=5
 ```
 
-# 4 - Iniciando a API
+# 3 - Iniciando a API
 ```bash
     npm start
 ```

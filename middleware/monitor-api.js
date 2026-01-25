@@ -46,7 +46,6 @@ const DOCKER_CONTAINERS_TO_MONITOR = [
     // "orderer10.example.com",
     "peer0.org1.example.com",
     "peer0.org2.example.com",
-    // Adicione containers de chaincode (dev-peer*) dinamicamente se necessário
 ];
 
 const LOG_DIR = path.join(os.tmpdir(), 'jmeter_fabric_logs');
@@ -58,10 +57,10 @@ if (!fs.existsSync(LOG_DIR)) {
 const monitoringProcesses = {};
 
 /**
- * Função principal de monitoramento, baseada na sua API Besu
+ * Função principal de monitoramento
  */
 function startMonitoring(runId, logStream) {
-    console.log(`[${runId}] Iniciando streams de stats para ${DOCKER_CONTAINERS_TO_MONITOR.length} containers...`);
+    console.log(`[INFO] - [${runId}] Iniciando streams de stats para ${DOCKER_CONTAINERS_TO_MONITOR.length} containers...`);
     
     // Escreve o cabeçalho para o script generateGraphs.py
     logStream.write('container,cpu,mem,net_rx,net_tx,disk_r,disk_w\n');
@@ -71,12 +70,12 @@ function startMonitoring(runId, logStream) {
         
         container.stats({ stream: true }, (err, stream) => {
             if (err) {
-                console.error(`[${runId}] Erro ao iniciar stats para ${containerName}: ${err.message}`);
+                console.error(`[INFO] - [${runId}] Erro ao iniciar stats para ${containerName}: ${err.message}`);
                 return;
             }
 
             if (!monitoringProcesses[runId]) {
-                 console.log(`[${runId}] Monitoramento parado antes do stream iniciar.`);
+                 console.log(`[INFO] - [${runId}] Monitoramento parado antes do stream iniciar.`);
                  stream.destroy();
                  return;
             }
@@ -92,7 +91,7 @@ function startMonitoring(runId, logStream) {
                         return;
                     }
 
-                    // --- Lógica de Cálculo de CPU (igual à da API Besu) ---
+                    // --- Lógica de Cálculo de CPU ---
                     const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
                     const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
                     const cpuCount = stats.cpu_stats.online_cpus || (stats.cpu_stats.cpu_usage.percpu_usage ? stats.cpu_stats.cpu_usage.percpu_usage.length : 0);
@@ -118,7 +117,7 @@ function startMonitoring(runId, logStream) {
                     // --- CORREÇÃO DA LÓGICA DO NOME ---
                     // Remove .example.com se existir, senão usa o nome como está
                     const shortName = containerName.replace('.example.com', '');
-                    // --- FIM DA CORREÇÃO ---
+                    
                     
                     const netRxKB = (netRx / 1024).toFixed(2);
                     const netTxKB = (netTx / 1024).toFixed(2);
@@ -157,7 +156,7 @@ app.post('/monitor/start', (req, res) => {
         return res.status(409).json({ message: `Monitoramento para ${runId} já está em execução.` });
     }
 
-    console.log(`Iniciando monitoramento para: ${runId}. Log em: ${logPath}`);
+    console.log(`[INFO] Iniciando monitoramento para: ${runId}. Log em: ${logPath}`);
     const logStream = fs.createWriteStream(logPath, { flags: 'w' });
 
     monitoringProcesses[runId] = { 
@@ -176,7 +175,7 @@ app.post('/monitor/stop', (req, res) => {
     const processInfo = monitoringProcesses[runId];
 
     if (processInfo) {
-        console.log(`Parando monitoramento para: ${runId}`);
+        console.log(`[INFO] Parando monitoramento para: ${runId}`);
         processInfo.streams.forEach(stream => {
             if (stream && typeof stream.destroy === 'function') {
                 stream.destroy();
@@ -203,6 +202,6 @@ app.get('/monitor/logs/:roundName/:runNumber', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`API de Monitoramento (Fabric/Docker) rodando em http://localhost:${port}`);
-    console.log(`Logs de monitoramento serão salvos em: ${LOG_DIR}`);
+    console.log(`[INFO] API de Monitoramento (Fabric/Docker) rodando em http://localhost:${port}`);
+    console.log(`[INFO] Logs de monitoramento serão salvos em: ${LOG_DIR}`);
 });
