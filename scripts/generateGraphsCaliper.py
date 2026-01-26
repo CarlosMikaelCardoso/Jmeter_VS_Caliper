@@ -1,103 +1,144 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib
+import numpy as np
 import os
 import sys
 import glob
 import re
 
-# Cores para os containers
-NODE_COLORS = {
-    'orderer': '#1f77b4', 'orderer2': '#17becf', 'orderer3': '#bcbd22', 'orderer4': '#7f7f7f', 'orderer5': '#e377c2',
-    'peer0.org1': '#ff7f0e', 'peer0.org2': '#2ca02c', 
-    'couchdb0': '#d62728', 'couchdb1': '#9467bd',
-}
+try:
+    import scienceplots
+    plt.style.use(['science', 'ieee', 'high-vis'])
+except:
+    plt.style.use('seaborn-v0_8-paper')
+
+def clean_metric(val):
+    if isinstance(val, (int, float)): return val
+    try: return float(str(val).replace('%', '').replace('MiB', '').replace('KB', '').replace('B', ''))
+    except: return 0.0
+
+def natural_sort_key(name):
+    name = str(name).lower()
+    if 'orderer' in name: priority = 0
+    elif 'peer' in name:  priority = 1
+    elif 'couch' in name: priority = 2
+    else: priority = 3
+    numbers = tuple(int(s) for s in re.findall(r'\d+', name))
+    return (priority, numbers, name)
+
+def remove_ansi_colors(text):
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 def parse_caliper_log(log_file, round_name):
-    """ Lê log de texto do Caliper e extrai tabela via Regex. """
     try:
-        with open(log_file, 'r') as f: content = f.read()
-    except: return None
-
-    # Regex para capturar linha de valores da tabela do Caliper
-    regex = r"\|\s*" + re.escape(round_name) + r"\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d\.]+)\s*TPS\s*\|\s*([\d\.]+)\s*s\s*\|\s*([\d\.]+)\s*s\s*\|\s*([\d\.]+)\s*s\s*\|\s*([\d\.]+)\s*s"
-    match = re.search(regex, content, re.IGNORECASE)
-
-    if match:
-        return {
-            'Succ': int(match.group(1)),
-            'Fail': int(match.group(2)),
-            'Avg Latency (s)': float(match.group(6)),
-            'Throughput (TPS)': float(match.group(7)) # Pega a última coluna (Throughput)
-        }
+        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            content = remove_ansi_colors(f.read())
+        
+        target_name = round_name.lower()
+        for line in content.splitlines():
+            line_lower = line.lower()
+            if f"| {target_name} " in line_lower or f"|{target_name}|" in line_lower:
+                parts = [p.strip() for p in line.split('|')]
+                if len(parts) >= 9:
+                    try:
+                        # Limpa caracteres não numéricos
+                        def get_num(s): return float(re.sub(r'[^\d\.]', '', s) or 0)
+                        
+                        return {
+                            'Scenario': round_name,
+                            'Samples': int(get_num(parts[2]) + get_num(parts[3])), # Succ + Fail
+                            'Success': int(get_num(parts[2])),
+                            'Fail': int(get_num(parts[3])),
+                            'Avg Latency (s)': get_num(parts[7]),
+                            'TPS': get_num(parts[8])
+                        }
+                    except: pass
+    except: pass
     return None
 
 def analyze_docker_stats(stats_file):
-    """ Lê log Docker (JSON/CSV) com proteção contra arquivos vazios. """
     try:
-        if not os.path.exists(stats_file) or os.stat(stats_file).st_size == 0:
-            return None
-        
-        try: df = pd.read_json(stats_file)
-        except ValueError:
+        if not os.path.exists(stats_file) or os.stat(stats_file).st_size == 0: return None
+        df = None
+        if stats_file.endswith('.json'):
+            try: df = pd.read_json(stats_file)
+            except ValueError:
+                try: df = pd.read_json(stats_file, lines=True)
+                except: pass
+        if df is None:
             try: df = pd.read_csv(stats_file)
             except: return None
-            
-        if df.empty: return None
+        if df is None or df.empty: return None
 
-        # Limpeza
-        for col in ['cpu', 'mem']:
-            if col in df.columns and df[col].dtype == object:
-                df[col] = df[col].astype(str).str.replace('%', '').str.replace('MiB', '').str.replace('KB', '').str.replace('B', '')
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        return df
+        df.columns = df.columns.str.lower()
+        rename_map = {'cpu %': 'cpu', 'mem usage': 'mem', 'memory': 'mem', 'name': 'container'}
+        df.rename(columns=rename_map, inplace=True)
+        if 'cpu' in df.columns and 'mem' in df.columns:
+            df['cpu'] = df['cpu'].apply(clean_metric)
+            df['mem'] = df['mem'].apply(clean_metric)
+            return df
     except: return None
 
-def plot_summary_table(summary_data, title, output_path):
-    """ Gera Tabela de Resumo como Imagem PNG. """
-    if not summary_data: return
+def plot_combined_table(summary_list, output_path):
+    if not summary_list: return
+    df = pd.DataFrame(summary_list)
+    
+    df.to_csv(os.path.join(output_path, "round_performance_summary.csv"), index=False, float_format="%.4f")
+    
+    latex_code = df.to_latex(index=False, float_format="%.3f", caption="Caliper Performance Summary", label="tab:caliper_round")
+    with open(os.path.join(output_path, "round_performance_summary.tex"), "w") as f: f.write(latex_code)
 
-    metrics = [
-        ['Sucesso', f"{int(summary_data['Succ'])}"],
-        ['Falhas', f"{int(summary_data['Fail'])}"],
-        ['Latência Média', f"{summary_data['Avg Latency (s)']:.3f} s"],
-        ['Throughput (TPS)', f"{summary_data['Throughput (TPS)']:.2f}"]
-    ]
+    fig, ax = plt.subplots(figsize=(8, 3))
+    ax.axis('tight'); ax.axis('off')
     
-    df = pd.DataFrame(metrics, columns=['Métrica', 'Valor'])
-    
-    fig, ax = plt.subplots(figsize=(5, 3))
-    ax.axis('tight')
-    ax.axis('off')
-    
-    table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='left')
-    table.scale(1.2, 1.5)
-    table.auto_set_font_size(False)
-    table.set_fontsize(11)
-    
-    plt.title(f"Resumo - {title}", fontsize=13, weight='bold')
-    plt.savefig(os.path.join(output_path, f"summary_table_{title.lower()}.png"), bbox_inches='tight', dpi=150)
+    cell_text = []
+    for row in df.values:
+        cell_text.append([str(row[0]), str(int(row[1])), str(int(row[2])), str(int(row[3])), f"{row[4]:.3f}", f"{row[5]:.2f}"])
+
+    table = ax.table(cellText=cell_text, colLabels=df.columns, loc='center', cellLoc='center')
+    table.auto_set_font_size(False); table.set_fontsize(10); table.scale(1.2, 1.5)
+    plt.title("Performance Summary (Round)", fontsize=14, weight='bold')
+    plt.savefig(os.path.join(output_path, "round_performance_summary.png"), bbox_inches='tight', dpi=150)
     plt.close()
 
-def plot_resource_bar(df, title, resource, unit, output_path):
-    """ Gera Gráfico de Barras para CPU ou Memória. """
-    if df.empty or resource not in df.columns: return
+def plot_resource_charts(df, scenario, output_path):
+    if df.empty: return
+    summary = df.groupby('container')[['cpu', 'mem']].mean()
+    valid_indices = [c for c in summary.index if any(x in c.lower() for x in ['orderer', 'peer', 'couch'])]
+    if not valid_indices: return
+    summary = summary.loc[valid_indices]
+    
+    summary['sort_key'] = summary.index.map(natural_sort_key)
+    summary = summary.sort_values('sort_key')
+    
+    num_bars = len(summary)
+    try: cmap = matplotlib.colormaps['tab20']
+    except: cmap = plt.get_cmap('tab20')
+    colors = cmap(np.linspace(0, 1, max(num_bars, 2)))[:num_bars]
 
-    summary = df.groupby('container')[resource].mean().sort_values()
-    colors = [NODE_COLORS.get(c, '#555') for c in summary.index]
-
+    # CPU
     plt.figure(figsize=(8, 5))
-    bars = plt.bar(summary.index, summary.values, color=colors, alpha=0.9)
-    
-    plt.title(f'Média de Uso: {resource.upper()} - {title}')
-    plt.ylabel(unit)
-    plt.xlabel('Container')
-    plt.xticks(rotation=45, ha='right')
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
-    plt.bar_label(bars, fmt='%.1f', padding=3)
-    
+    bars = plt.bar(summary.index, summary['cpu'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
+    plt.ylabel('Avg CPU (Percentage)'); plt.title(f'CPU Usage - {scenario}')
+    plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
+    plt.ylim(0, summary['cpu'].max() * 1.3 if summary['cpu'].max() > 0 else 10)
+    plt.bar_label(bars, labels=[f"{v:.2f}%" for v in summary['cpu']], padding=3, fontsize=8)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_path, f"bar_{resource}_{title.lower()}.png"), dpi=150)
+    plt.savefig(os.path.join(output_path, f"bar_cpu_{scenario.lower()}.pdf")) # PDF
+    plt.close()
+
+    # Memória
+    plt.figure(figsize=(8, 5))
+    bars = plt.bar(summary.index, summary['mem'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
+    plt.ylabel('Avg Mem (MiB)'); plt.title(f'Memory Usage - {scenario}')
+    plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
+    plt.ylim(0, summary['mem'].max() * 1.3 if summary['mem'].max() > 0 else 100)
+    plt.bar_label(bars, labels=[f"{v:.1f}" for v in summary['mem']], padding=3, fontsize=8)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_path, f"bar_mem_{scenario.lower()}.pdf"))
     plt.close()
 
 def main():
@@ -108,44 +149,41 @@ def main():
     results_dir = sys.argv[1]
     graphs_dir = os.path.join(results_dir, "graphs")
     os.makedirs(graphs_dir, exist_ok=True)
-    print(f"--- Gerando gráficos Caliper simplificados em: {graphs_dir} ---")
+    print(f"--- Processando Caliper em: {graphs_dir} ---")
 
     rounds = ["Open", "Query", "Transfer"]
-    
+    summary_list = []
+
     for round_name in rounds:
-        # 1. Performance (Logs Caliper)
-        log_pattern = os.path.join(results_dir, f"caliper_{round_name.lower()}*.log")
-        log_files = glob.glob(log_pattern)
+        # 1. Performance
+        files = glob.glob(os.path.join(results_dir, f"caliper*{round_name.lower()}*.log"))
+        files += glob.glob(os.path.join(results_dir, f"caliper*{round_name.lower()}*.txt"))
+        if not files: # Busca fallback
+            files = glob.glob(os.path.join(results_dir, f"*run_*.txt"))
+            files += glob.glob(os.path.join(results_dir, f"*run_*.log"))
+
+        for f in files:
+            perf = parse_caliper_log(f, round_name)
+            if perf: 
+                summary_list.append(perf)
+                break # Pega apenas o primeiro arquivo válido por rodada para não duplicar
+
+        # 2. Recursos
+        stats_files = glob.glob(os.path.join(results_dir, f"docker_stats_{round_name.lower()}*"))
+        docker_dfs = []
+        for f in stats_files:
+            df = analyze_docker_stats(f)
+            if df is not None: docker_dfs.append(df)
         
-        all_perf = []
-        if log_files:
-            print(f"  -> Processando Performance: {round_name}")
-            for f in log_files:
-                perf = parse_caliper_log(f, round_name)
-                if perf: all_perf.append(perf)
+        if docker_dfs:
+            full_df = pd.concat(docker_dfs, ignore_index=True)
+            plot_resource_charts(full_df, round_name, graphs_dir)
 
-        # 2. Recursos (Docker Stats)
-        stats_pattern = os.path.join(results_dir, f"docker_stats_{round_name.lower()}*")
-        stats_files = glob.glob(stats_pattern)
-        
-        all_docker = []
-        if stats_files:
-            # print(f"  -> Processando Recursos: {round_name}")
-            for f in stats_files:
-                df = analyze_docker_stats(f)
-                if df is not None: all_docker.append(df)
-
-        # 3. Gerar Saídas (Apenas Summary e CPU/Mem)
-        if all_perf:
-            # Caliper geralmente é um arquivo só por rodada, pegamos o primeiro
-            plot_summary_table(all_perf[0], round_name, graphs_dir)
-
-        if all_docker:
-            full_df = pd.concat(all_docker, ignore_index=True)
-            plot_resource_bar(full_df, round_name, 'cpu', '% CPU', graphs_dir)
-            plot_resource_bar(full_df, round_name, 'mem', 'MiB Mem', graphs_dir)
-
-    print("Concluído.")
+    if summary_list:
+        plot_combined_table(summary_list, graphs_dir)
+        print("✅ Tabelas e Gráficos Caliper gerados com sucesso.")
+    else:
+        print("⚠️  Nenhum dado Caliper encontrado.")
 
 if __name__ == "__main__":
     main()

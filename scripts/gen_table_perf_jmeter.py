@@ -5,15 +5,13 @@ import glob
 import re
 
 def generate_jmeter_table(results_dir, output_dir):
-    # [CORREÇÃO] Garante que a pasta de saída existe
     os.makedirs(output_dir, exist_ok=True)
-    
-    print(f"--- [JMeter] Gerando Tabela de Performance ---")
+    print(f"--- [JMeter] Gerando Tabela Consolidada (SOMA de Amostras / MÉDIA de TPS) ---")
     
     rounds = ["Open", "Query", "Transfer"]
     summary_list = []
 
-    # Backend errors log
+    # Carrega erros de backend
     backend_err_path = os.path.join(os.path.dirname(results_dir), 'backend_errors.log')
     backend_errors = pd.DataFrame()
     if os.path.exists(backend_err_path):
@@ -48,35 +46,49 @@ def generate_jmeter_table(results_dir, output_dir):
 
                 summary_list.append({
                     'Scenario': round_name,
-                    'Run': run_id,
                     'Samples': total,
                     'Success': succ_real,
                     'Fail': fail_total,
                     'Avg Latency (s)': df['elapsed'].mean() / 1000.0,
-                    'P99 Latency (s)': df['elapsed'].quantile(0.99) / 1000.0,
                     'TPS': tps
                 })
-            except Exception as e:
-                print(f"Erro em {f}: {e}")
+            except: pass
 
     if summary_list:
         df_final = pd.DataFrame(summary_list)
-        df_avg = df_final.groupby('Scenario').mean(numeric_only=True).reset_index()
         
-        csv_path = os.path.join(output_dir, "jmeter_performance.csv")
-        df_avg.to_csv(csv_path, index=False, float_format="%.4f")
+        # [MUDANÇA CRUCIAL] Agregação Híbrida:
+        # - Contagens (Samples, Success, Fail) -> SOMA (sum)
+        # - Performance (Latência, TPS) -> MÉDIA (mean)
+        agg_rules = {
+            'Samples': 'sum',
+            'Success': 'sum',
+            'Fail': 'sum',
+            'Avg Latency (s)': 'mean',
+            'TPS': 'mean'
+        }
         
-        tex_path = os.path.join(output_dir, "jmeter_performance.tex")
-        latex_code = df_avg.to_latex(
+        df_consolidated = df_final.groupby('Scenario').agg(agg_rules).reset_index()
+        
+        # Salva CSV
+        df_consolidated.to_csv(os.path.join(output_dir, "jmeter_performance.csv"), index=False, float_format="%.4f")
+        
+        # Salva LaTeX (Formatado com inteiros para contagens e floats para tempo)
+        latex_code = df_consolidated.to_latex(
             index=False, 
             float_format="%.3f",
-            columns=['Scenario', 'Success', 'Fail', 'Avg Latency (s)', 'TPS'],
-            caption="JMeter Performance Summary (Average)",
-            label="tab:jmeter_perf"
+            formatters={
+                'Samples': "{:.0f}".format, 
+                'Success': "{:.0f}".format, 
+                'Fail': "{:.0f}".format
+            },
+            caption=f"JMeter Consolidated Results (Total of {len(summary_list)//3} rounds)",
+            label="tab:jmeter_perf_total"
         )
-        with open(tex_path, "w") as f: f.write(latex_code)
+        with open(os.path.join(output_dir, "jmeter_performance.tex"), "w") as f: f.write(latex_code)
         
-        print(f"✅ Tabelas salvas em: {output_dir}")
+        print(f"✅ Tabela JMeter gerada.")
+        print(f"   Exemplo Open: Samples={df_consolidated.loc[df_consolidated['Scenario']=='Open', 'Samples'].values[0]} (Esperado: ~32000)")
     else:
         print("⚠️  Nenhum dado JMeter encontrado.")
 

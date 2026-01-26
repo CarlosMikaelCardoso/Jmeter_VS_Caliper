@@ -1,41 +1,58 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib
+import numpy as np
 import os
 import sys
 import glob
 import re
 
-# Cores para os containers
+# Tenta usar estilo científico
+try:
+    import scienceplots
+    plt.style.use(['science', 'ieee', 'high-vis'])
+except:
+    plt.style.use('seaborn-v0_8-paper')
+
+# --- CONFIGURAÇÕES VISUAIS ---
 NODE_COLORS = {
-    'orderer': '#1f77b4', 'orderer2': '#17becf', 'orderer3': '#bcbd22', 'orderer4': '#7f7f7f', 'orderer5': '#e377c2',
-    'peer0.org1': '#ff7f0e', 'peer0.org2': '#2ca02c', 
-    'couchdb0': '#d62728', 'couchdb1': '#9467bd',
+    'orderer': '#1f77b4', 'orderer2': '#17becf', 'orderer3': '#bcbd22',
+    'peer0.org1': '#ff7f0e', 'peer0.org2': '#2ca02c', 'peer0.org3': '#8c564b',
+    'couchdb0': '#d62728', 'couchdb1': '#9467bd', 'couchdb2': '#e377c2'
 }
 
+def clean_metric(val):
+    if isinstance(val, (int, float)): return val
+    try: return float(str(val).replace('%', '').replace('MiB', '').replace('KB', '').replace('B', ''))
+    except: return 0.0
+
+def natural_sort_key(name):
+    name = str(name).lower()
+    if 'orderer' in name: priority = 0
+    elif 'peer' in name:  priority = 1
+    elif 'couch' in name: priority = 2
+    else: priority = 3
+    numbers = tuple(int(s) for s in re.findall(r'\d+', name))
+    return (priority, numbers, name)
+
 def parse_jmeter_jtl(jtl_file, round_name, run_number, backend_errors_df):
-    """ Lê arquivo JTL e calcula métricas principais. """
     try:
         df = pd.read_csv(jtl_file)
-    except Exception as e:
-        print(f"  -> Erro leitura JTL {os.path.basename(jtl_file)}: {e}")
-        return None
-
+    except: return None
     if df.empty: return None
 
     jmeter_success = df['success'].sum()
     jmeter_fail = len(df) - jmeter_success
     
-    # Latência em segundos
     avg_latency_s = df['elapsed'].mean() / 1000.0
     p99_latency_s = df['elapsed'].quantile(0.99) / 1000.0
 
-    # Throughput
-    start_time_ms = df['timeStamp'].min()
-    end_time_ms = (df['timeStamp'] + df['elapsed']).max()
-    duration_s = (end_time_ms - start_time_ms) / 1000.0
+    start_time = df['timeStamp'].min()
+    end_time = (df['timeStamp'] + df['elapsed']).max()
+    duration_s = (end_time - start_time) / 1000.0
     throughput_tps = jmeter_success / duration_s if duration_s > 0 else 0
 
-    # Erros do Backend
     backend_fail_count = 0
     if not backend_errors_df.empty:
         try:
@@ -47,91 +64,127 @@ def parse_jmeter_jtl(jtl_file, round_name, run_number, backend_errors_df):
                 backend_fail_count = matches['count'].sum()
         except: pass
 
+    # Ajuste final
+    succ_real = max(0, jmeter_success - backend_fail_count)
+    fail_total = jmeter_fail + backend_fail_count
+    
+    # Recalcula TPS baseado no sucesso real
+    tps_real = succ_real / duration_s if duration_s > 0 else 0
+
     return {
-        'Round': round_name, 'Run': run_number,
-        'Succ': jmeter_success, 'JMeter_Fail': jmeter_fail,
-        'Backend_Fail': backend_fail_count, 'Fail': jmeter_fail + backend_fail_count,
-        'Avg Latency (s)': avg_latency_s, 'P99 Latency (s)': p99_latency_s,
-        'Throughput (TPS)': throughput_tps
+        'Scenario': round_name,
+        'Samples': len(df),
+        'Success': int(succ_real),
+        'Fail': int(fail_total),
+        'Avg Latency (s)': avg_latency_s,
+        'TPS': tps_real
     }
 
 def analyze_docker_stats(stats_file):
-    """ Lê log Docker (JSON ou CSV) com proteção contra arquivos vazios. """
     try:
-        if not os.path.exists(stats_file) or os.stat(stats_file).st_size == 0:
-            return None
-
-        try:
-            df = pd.read_json(stats_file)
-        except ValueError:
+        if not os.path.exists(stats_file) or os.stat(stats_file).st_size == 0: return None
+        
+        df = None
+        if stats_file.endswith('.json'):
+            try: df = pd.read_json(stats_file)
+            except ValueError:
+                try: df = pd.read_json(stats_file, lines=True)
+                except: pass
+        
+        if df is None:
             try: df = pd.read_csv(stats_file)
             except: return None
-        
-        if df.empty: return None
 
-        # Limpeza de unidades (se necessário)
-        for col in ['cpu', 'mem']:
-            if col in df.columns and df[col].dtype == object:
-                df[col] = df[col].astype(str).str.replace('%', '').str.replace('MiB', '').str.replace('KB', '').str.replace('B', '')
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        if df is None or df.empty: return None
+
+        df.columns = df.columns.str.lower()
+        rename_map = {'cpu %': 'cpu', 'mem usage': 'mem', 'memory': 'mem', 'name': 'container'}
+        df.rename(columns=rename_map, inplace=True)
         
-        return df
+        if 'cpu' in df.columns and 'mem' in df.columns:
+            df['cpu'] = df['cpu'].apply(clean_metric)
+            df['mem'] = df['mem'].apply(clean_metric)
+            return df
     except: return None
 
-def plot_summary_table(summary_data, title, output_path):
-    """ Gera Tabela de Resumo como Imagem PNG. """
-    if not summary_data: return
+def plot_combined_table(summary_list, output_path):
+    """ Gera Tabela Unificada (PNG, CSV, LaTeX) """
+    if not summary_list: return
 
-    # Prepara os dados para a tabela
-    metrics = [
-        ['Total Amostras', f"{int(summary_data['Total'])}"],
-        ['Sucesso (Real)', f"{int(summary_data['Succ'])}"],
-        ['Falhas (Total)', f"{int(summary_data['Fail'])}"],
-        ['Latência Média', f"{summary_data['Avg Latency (s)']:.3f} s"],
-        ['Latência P99',   f"{summary_data['P99 Latency (s)']:.3f} s"],
-        ['Throughput (TPS)', f"{summary_data['Throughput (TPS)']:.2f}"]
-    ]
+    df = pd.DataFrame(summary_list)
     
-    df = pd.DataFrame(metrics, columns=['Métrica', 'Valor'])
+    # 1. Salva CSV
+    df.to_csv(os.path.join(output_path, "round_performance_summary.csv"), index=False, float_format="%.4f")
+    
+    # 2. Salva LaTeX
+    latex_code = df.to_latex(index=False, float_format="%.3f", caption="Round Performance Summary", label="tab:round_perf")
+    with open(os.path.join(output_path, "round_performance_summary.tex"), "w") as f: f.write(latex_code)
 
-    fig, ax = plt.subplots(figsize=(5, 3))
+    # 3. Salva PNG (Bonito)
+    fig, ax = plt.subplots(figsize=(8, 3))
     ax.axis('tight')
     ax.axis('off')
     
-    # Cria a tabela
-    table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='left')
-    table.scale(1.2, 1.5)
+    # Formata valores para exibição
+    cell_text = []
+    for row in df.values:
+        fmt_row = [
+            str(row[0]), # Scenario
+            str(int(row[1])), # Samples
+            str(int(row[2])), # Success
+            str(int(row[3])), # Fail
+            f"{row[4]:.3f}",  # Latency
+            f"{row[5]:.2f}"   # TPS
+        ]
+        cell_text.append(fmt_row)
+
+    table = ax.table(cellText=cell_text, colLabels=df.columns, loc='center', cellLoc='center')
     table.auto_set_font_size(False)
-    table.set_fontsize(11)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.5)
     
-    plt.title(f"Resumo - {title}", fontsize=13, weight='bold')
-    plt.savefig(os.path.join(output_path, f"summary_table_{title.lower()}.png"), bbox_inches='tight', dpi=150)
+    plt.title("Performance Summary (Round)", fontsize=14, weight='bold')
+    plt.savefig(os.path.join(output_path, "round_performance_summary.png"), bbox_inches='tight', dpi=150)
     plt.close()
 
-def plot_resource_bar(df, title, resource, unit, output_path):
-    """ Gera Gráfico de Barras para CPU ou Memória. """
-    if df.empty or resource not in df.columns: return
+def plot_resource_charts(df, scenario, output_path):
+    """ Gera Gráficos de Recursos V2 (Estilo Consolidado) """
+    if df.empty: return
 
-    # Calcula a média por container
-    summary = df.groupby('container')[resource].mean().sort_values()
+    summary = df.groupby('container')[['cpu', 'mem']].mean()
+    valid_indices = [c for c in summary.index if any(x in c.lower() for x in ['orderer', 'peer', 'couch'])]
+    if not valid_indices: return
+    summary = summary.loc[valid_indices]
     
-    # Define cores
-    colors = [NODE_COLORS.get(c, '#555') for c in summary.index]
+    # Ordenação Inteligente
+    summary['sort_key'] = summary.index.map(natural_sort_key)
+    summary = summary.sort_values('sort_key')
+    
+    num_bars = len(summary)
+    try: cmap = matplotlib.colormaps['tab20']
+    except: cmap = plt.get_cmap('tab20')
+    colors = cmap(np.linspace(0, 1, max(num_bars, 2)))[:num_bars]
 
+    # CPU
     plt.figure(figsize=(8, 5))
-    bars = plt.bar(summary.index, summary.values, color=colors, alpha=0.9)
-    
-    plt.title(f'Média de Uso: {resource.upper()} - {title}')
-    plt.ylabel(unit)
-    plt.xlabel('Container')
-    plt.xticks(rotation=45, ha='right')
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
-    
-    # Adiciona valores no topo das barras
-    plt.bar_label(bars, fmt='%.1f', padding=3)
-    
+    bars = plt.bar(summary.index, summary['cpu'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
+    plt.ylabel('Avg CPU (Percentage)'); plt.title(f'CPU Usage - {scenario}')
+    plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
+    plt.ylim(0, summary['cpu'].max() * 1.3 if summary['cpu'].max() > 0 else 10)
+    plt.bar_label(bars, labels=[f"{v:.2f}%" for v in summary['cpu']], padding=3, fontsize=8)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_path, f"bar_{resource}_{title.lower()}.png"), dpi=150)
+    plt.savefig(os.path.join(output_path, f"bar_cpu_{scenario.lower()}.pdf")) # PDF para qualidade
+    plt.close()
+
+    # Memória
+    plt.figure(figsize=(8, 5))
+    bars = plt.bar(summary.index, summary['mem'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
+    plt.ylabel('Avg Mem (MiB)'); plt.title(f'Memory Usage - {scenario}')
+    plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
+    plt.ylim(0, summary['mem'].max() * 1.3 if summary['mem'].max() > 0 else 100)
+    plt.bar_label(bars, labels=[f"{v:.1f}" for v in summary['mem']], padding=3, fontsize=8)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_path, f"bar_mem_{scenario.lower()}.pdf"))
     plt.close()
 
 def main():
@@ -142,70 +195,46 @@ def main():
     results_dir = sys.argv[1]
     graphs_dir = os.path.join(results_dir, "graphs")
     os.makedirs(graphs_dir, exist_ok=True)
-    print(f"--- Gerando gráficos simplificados em: {graphs_dir} ---")
+    print(f"--- Processando JMeter em: {graphs_dir} ---")
 
     rounds = ["Open", "Query", "Transfer"]
     
-    # Carrega erros de backend se existir
+    # Carrega erros backend
     backend_err_path = os.path.join(os.path.dirname(results_dir), 'backend_errors.log')
     backend_errors_df = pd.DataFrame()
     if os.path.exists(backend_err_path):
         try: backend_errors_df = pd.read_csv(backend_err_path, names=['round', 'run', 'count', 'details'])
         except: pass
 
+    summary_list = []
+
     for round_name in rounds:
-        # 1. Performance (JTL)
-        jtl_pattern = os.path.join(results_dir, f"results_{round_name.lower()}*.jtl")
-        jtl_files = glob.glob(jtl_pattern)
-        
-        all_perf = []
+        # 1. Performance
+        jtl_files = glob.glob(os.path.join(results_dir, f"results_{round_name.lower()}*.jtl"))
         if jtl_files:
-            print(f"  -> Processando Performance: {round_name}")
             for f in jtl_files:
                 match = re.search(r'run_(\d+)', f)
                 run_num = int(match.group(1)) if match else 1
                 perf = parse_jmeter_jtl(f, round_name, run_num, backend_errors_df)
-                if perf: all_perf.append(perf)
+                if perf: summary_list.append(perf)
+
+        # 2. Recursos
+        stats_files = glob.glob(os.path.join(results_dir, f"docker_stats_{round_name.lower()}*"))
+        docker_dfs = []
+        for f in stats_files:
+            df = analyze_docker_stats(f)
+            if df is not None: docker_dfs.append(df)
         
-        # 2. Recursos (Docker Stats)
-        stats_pattern = os.path.join(results_dir, f"docker_stats_{round_name.lower()}*")
-        stats_files = glob.glob(stats_pattern)
-        
-        all_docker = []
-        if stats_files:
-            # print(f"  -> Processando Recursos: {round_name}")
-            for f in stats_files:
-                df = analyze_docker_stats(f)
-                if df is not None: all_docker.append(df)
+        if docker_dfs:
+            full_df = pd.concat(docker_dfs, ignore_index=True)
+            plot_resource_charts(full_df, round_name, graphs_dir)
 
-        # 3. Gerar Saídas (Apenas Summary e CPU/Mem)
-        if all_perf:
-            # Consolida dados (usa o primeiro ou média)
-            d = all_perf[0]
-            # Correção de TPS (Backend Failures)
-            succ_http = d['Succ']
-            fail_back = d['Backend_Fail']
-            succ_real = max(0, succ_http - fail_back)
-            factor = (succ_real / succ_http) if succ_http > 0 else 0
-            tps_real = d['Throughput (TPS)'] * factor
-
-            summary_data = {
-                'Total': d['Succ'] + d['JMeter_Fail'],
-                'Succ': succ_real,
-                'Fail': d['JMeter_Fail'] + fail_back,
-                'Avg Latency (s)': d['Avg Latency (s)'],
-                'P99 Latency (s)': d['P99 Latency (s)'],
-                'Throughput (TPS)': tps_real
-            }
-            plot_summary_table(summary_data, round_name, graphs_dir)
-
-        if all_docker:
-            full_df = pd.concat(all_docker, ignore_index=True)
-            # Apenas os 2 gráficos pedidos
-            plot_resource_bar(full_df, round_name, 'cpu', '% CPU', graphs_dir)
-            plot_resource_bar(full_df, round_name, 'mem', 'MiB Mem', graphs_dir)
-
-    print("Concluído.")
+    # Gera Tabela Consolidada da Rodada
+    if summary_list:
+        plot_combined_table(summary_list, graphs_dir)
+        print("✅ Tabelas e Gráficos gerados com sucesso.")
+    else:
+        print("⚠️  Nenhum dado de performance encontrado.")
 
 if __name__ == "__main__":
     main()
