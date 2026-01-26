@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import matplotlib # Importação explícita para corrigir o aviso
+import matplotlib 
 import numpy as np
 import os
 import sys
