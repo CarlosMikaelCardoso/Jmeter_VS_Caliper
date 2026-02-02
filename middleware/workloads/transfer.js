@@ -1,11 +1,8 @@
 'use strict';
+const { submitWithRetry } = require('../helper');
 
-class TransferWorkload {
-    constructor(fabricConnector) {
-        this.connector = fabricConnector;
-    }
-    async submitTransaction(sourceId, targetId, amount) {
-        return await this.connector.invoke('transfer', [sourceId, targetId, amount.toString()]);
-    }
-}
-module.exports = TransferWorkload;
+module.exports.run = async (contract, args) => {
+    // args esperados: [sourceID, destID, amount]
+    // Esta é a função que mais gera conflito MVCC
+    return await submitWithRetry(contract, 'transfer', args);
+};

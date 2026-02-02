@@ -12,7 +12,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Caminhos atualizados conforme sua imagem
 NETWORK_DIR="${PROJECT_ROOT}/network"
 CHAINCODE_DIR="${PROJECT_ROOT}/contracts/simple/go"
-API_CONFIG_DIR="${PROJECT_ROOT}/middleware/config"
+API_CONFIG_DIR="${PROJECT_ROOT}/middleware"
 API_WALLET_DIR="${PROJECT_ROOT}/middleware/wallet"
 
 function install_dependencies(){

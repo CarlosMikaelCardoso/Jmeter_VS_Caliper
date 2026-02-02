@@ -74,7 +74,9 @@ generate_accounts_csv() {
     if [ "$NUM_USERS" -eq 5 ]; then BASE_LOOPS=200; fi
     if [ "$NUM_USERS" -eq 10 ]; then BASE_LOOPS=100; fi
     if [ "$NUM_USERS" -eq 20 ]; then BASE_LOOPS=50; fi
-
+    if [ "$NUM_USERS" -eq 25 ]; then BASE_LOOPS=40; fi
+    if [ "$NUM_USERS" -eq 50 ]; then BASE_LOOPS=20; fi
+    
     export OPEN_LOOPS=$BASE_LOOPS
     export TRANSFER_LOOPS=$((BASE_LOOPS / 2))
     if [ "$TRANSFER_LOOPS" -lt 1 ]; then export TRANSFER_LOOPS=1; fi

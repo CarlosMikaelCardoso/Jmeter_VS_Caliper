@@ -1,216 +1,88 @@
-// --- Variáveis de Ambiente ---
-// export CHANNEL_NAME="mychannel"
-// export CHAINCODE_NAME="simple"
-// export API_USER="admin" 
-// export API_WORKERS=5
+/* middleware/api.js */
+'use strict';
 
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const bodyParser = require('body-parser');
+const { connectToNetwork } = require('./workloads/fabric-connector');
+const logger = require('./logger');
 
-const FabricConnector = require('./workloads/fabric-connector.js');
-const OpenWorkload = require('./workloads/open.js');
-const QueryWorkload = require('./workloads/query.js');
-const TransferWorkload = require('./workloads/transfer.js');
+// Importa os workloads
+const workloads = {
+    open: require('./workloads/open'),
+    query: require('./workloads/query'),
+    transfer: require('./workloads/transfer')
+};
 
 const app = express();
-const port = 3000;
-app.use(express.json());
+app.use(bodyParser.json());
+const PORT = 3000;
 
-const CHANNEL_NAME = process.env.CHANNEL_NAME || 'gercom';
-const CHAINCODE_NAME = process.env.CHAINCODE_NAME || 'simple';
-const API_USER = process.env.API_USER || 'admin';
-const NUM_WORKERS = parseInt(process.env.API_WORKERS || '5', 10);
+let contract = null;
 
-// Caminho do log para o script Python ler depois
-const LOG_FILE_PATH = path.join(__dirname, '../results/jmeter_runs/backend_errors.log');
+// Inicialização
+(async () => {
+    contract = await connectToNetwork();
+})();
 
-const workerPool = [];
-let currentWorkerIndex = 0;
-
-// Controle de Backpressure
-const MAX_PENDING_TX = 2000; 
-let pendingTransactions = 0;
-
-function getNextWorker() {
-    if (workerPool.length === 0) throw new Error("API não inicializada.");
-    const worker = workerPool[currentWorkerIndex];
-    currentWorkerIndex = (currentWorkerIndex + 1) % workerPool.length;
-    return worker;
-}
-
-// Função para registrar erro que acontece em background
-function logBackendError(round, runNumber, errorDetail) {
+// Endpoint Genérico de Invoke (Open e Transfer)
+app.post('/api/invoke', async (req, res) => {
     try {
-        const logLine = `${round},${runNumber},1,${errorDetail}\n`;
-        fs.appendFileSync(LOG_FILE_PATH, logLine);
-    } catch (err) {
-        console.error("[ERRO] Falha ao salvar log de erro:", err.message);
-    }
-}
-
-// --- Endpoints Assíncronos ---
-
-app.post('/open-async', (req, res) => {
-    const { accountId, amount } = req.body;
-    const runNumber = req.headers['x-run-number'] || '1'; 
-
-    if (!accountId || amount === undefined) {
-        return res.status(400).json({ error: "Dados incompletos" });
-    }
-
-    if (pendingTransactions >= MAX_PENDING_TX) {
-        return res.status(429).json({ error: "Server busy" });
-    }
-
-    pendingTransactions++;
-
-    // 1. Responde IMEDIATAMENTE ao JMeter (202 Accepted)
-    res.status(202).json({ status: "Accepted", message: "Processing" });
-
-    // 2. Processa em Background
-    (async () => {
-        try {
-            const worker = getNextWorker();
-            // Captura a resposta para pegar a latência
-            const response = await worker.workloads.open.submitTransaction(accountId, amount);
-            
-            // Log de sucesso com latência
-            console.log(`[OPEN] Sucesso: Conta ${accountId} | Latência Fabric: ${response.latency_ms}ms`);
-            
-        } catch (e) {
-            // Tratamento para ignorar erro de conta existente
-            // Verifica se a mensagem de erro contém "account already exists"
-            if (e.message && e.message.includes("account already exists")) {
-                console.log(`[OPEN] Aviso: Conta ${accountId} já existe (Ignorado).`);
-            } else {
-                // Mantém o log de erro para outros casos
-                console.error(`[OPEN] Erro Background: ${e.message}`);
-                logBackendError("Open", runNumber, "GENERIC_ERROR");
-            }
-        } finally {
-            pendingTransactions--;
+        // Reconexão
+        if (!contract) {
+            contract = await connectToNetwork();
+            if (!contract) return res.status(503).json({ error: 'Fabric Indisponível' });
         }
-    })();
-});
 
-app.post('/transfer-async', (req, res) => {
-    const { from, to, amount } = req.body;
-    const runNumber = req.headers['x-run-number'] || '1';
+        const { functionName, args } = req.body;
 
-    if (!from || !to || amount === undefined) {
-        return res.status(400).json({ error: "Dados incompletos" });
-    }
-
-    // 1. Responde IMEDIATAMENTE ao JMeter
-    res.status(202).json({ status: "Accepted", message: "Processing" });
-
-    // 2. Processa em Background com RETRY PROGRESSIVO (Backoff)
-    (async () => {
-        const MAX_RETRIES = 20; 
-        let attempt = 0;
-        let success = false;
-
-        while (attempt < MAX_RETRIES && !success) {
-            try {
-                const worker = getNextWorker();
-                
-                const response = await worker.workloads.transfer.submitTransaction(from, to, amount);
-                
-                console.log(`[TRANSFER] Sucesso: ${from}->${to} | Latência Fabric: ${response.latency_ms}ms`);
-                success = true; 
-                
-            } catch (e) {
-                const msg = e.message || "";
-                
-                if (msg.includes("MVCC_READ_CONFLICT")) {
-                    attempt++;
-                    if (attempt < MAX_RETRIES) {
-                        // ESTRATÉGIA DE BACKOFF:
-                        // O tempo de espera aumenta a cada tentativa falhada.
-                        // Tentativa 1: ~600ms
-                        // Tentativa 5: ~3000ms (dá tempo de sobra para o bloco fechar)
-                        const baseWait = attempt * 600; 
-                        const jitter = Math.floor(Math.random() * 1000); // +0 a 1s de aleatoriedade
-                        const delay = baseWait + jitter;
-                        
-                        console.log(`[TRANSFER] MVCC (${from}->${to}). Tentativa ${attempt}/${MAX_RETRIES} aguardando ${delay}ms...`);
-                        
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        continue; 
-                    }
-                }
-
-                // Erro final (esgotou tentativas ou erro genérico)
-                console.error(`[TRANSFER] Erro Final: ${msg}`);
-                
-                let type = "GENERIC_ERROR";
-                if (msg.includes("MVCC_READ_CONFLICT")) type = "MVCC_CONFLICT";
-                
-                logBackendError("Transfer", runNumber, type);
-                break;
-            }
+        // Verifica se o workload existe
+        if (!workloads[functionName]) {
+            return res.status(400).json({ error: `Função '${functionName}' não mapeada nos workloads.` });
         }
-    })();
-});
 
-// Query continua Síncrona (O JMeter espera a resposta)
-app.get('/query/:accountId', async (req, res) => {
-    try {
-        const worker = getNextWorker();
-        
-        // Executa a transação
-        const response = await worker.workloads.query.submitTransaction(req.params.accountId);
-        
-        // --- DEPURAÇÃO ---
-        // Mostra no terminal o sucesso e a latência, igual ao Open/Transfer
-        console.log(`[QUERY] Sucesso: Conta ${req.params.accountId} | Latência Fabric: ${response.latency_ms}ms`);
-        
-        res.status(200).json({ 
-            balance: response.balance, 
-            latency_ms: response.latency_ms 
+        // Executa o workload específico (com retry embutido)
+        const response = await workloads[functionName].run(contract, args);
+
+        res.json({
+            success: true,
+            result: response.result.toString(),
+            latency_ms: response.latency
         });
 
-    } catch (e) {
-        // Log de erro apenas no terminal para você ver
-        console.error(`[QUERY] Erro: ${e.message}`);
-        
-        // Retornamos 500. O JMeter conta isso como falha automaticamente.
-        res.status(500).json({ error: e.message });
+    } catch (error) {
+        // Se chegou aqui, acabaram os retries ou foi erro grave
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
-// Limpeza de logs
-app.post('/errors/clear', (req, res) => {
+// Endpoint de Query
+app.get('/api/query', async (req, res) => {
     try {
-        if (fs.existsSync(LOG_FILE_PATH)) fs.unlinkSync(LOG_FILE_PATH);
-        res.status(200).send("Logs limpos.");
-    } catch (e) { res.status(500).send(e.message); }
-});
+        if (!contract) contract = await connectToNetwork();
 
-async function startServer() {
-    try {
-        console.log(`[INFO] Iniciando ${NUM_WORKERS} workers...`);
-        const logDir = path.dirname(LOG_FILE_PATH);
-        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+        const { functionName, args } = req.query;
+        const argsArray = Array.isArray(args) ? args : (args ? [args] : []);
 
-        for (let i = 0; i < NUM_WORKERS; i++) {
-            const connector = new FabricConnector();
-            await connector.initialize(API_USER, CHANNEL_NAME, CHAINCODE_NAME);
-            workerPool.push({
-                id: i,
-                workloads: {
-                    open: new OpenWorkload(connector),
-                    query: new QueryWorkload(connector),
-                    transfer: new TransferWorkload(connector)
-                }
-            });
+        if (functionName !== 'query') { // Ajuste se seu chaincode usar outro nome
+             return res.status(400).json({ error: 'Apenas função "query" suportada neste endpoint' });
         }
-        app.listen(port, () => console.log(`[INFO] API Async rodando na porta ${port}`));
-    } catch (e) {
-        console.error("[ERRO] Erro fatal:", e);
-        process.exit(1);
-    }
-}
 
-startServer();
+        const response = await workloads.query.run(contract, argsArray);
+
+        res.json({
+            success: true,
+            result: response.result.toString()
+        });
+
+    } catch (error) {
+        logger.error(`Erro Query: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.listen(PORT, () => {
+    logger.info(`🚀 API rodando na porta ${PORT}`);
+});

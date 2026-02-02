@@ -1,15 +1,13 @@
 'use strict';
+const logger = require('../logger');
 
-class QueryWorkload {
-    constructor(fabricConnector) {
-        this.connector = fabricConnector;
-    }
-    async submitTransaction(accountId) {
-        const response = await this.connector.query('query', [accountId]);
-        return {
-            balance: response.result.toString('utf8'),
-            latency_ms: response.latency_ms
-        };
-    }
-}
-module.exports = QueryWorkload;
+module.exports.run = async (contract, args) => {
+    // Query não precisa de retry de MVCC (é leitura) e nem de submitTransaction
+    // args esperados: [userID]
+    const stringArgs = args.map(String);
+    
+    logger.info(`[Query] query | Args: ${JSON.stringify(stringArgs)}`);
+    
+    const result = await contract.evaluateTransaction('query', ...stringArgs);
+    return { result, latency: 0 }; // Latência de query é instantânea no client-side
+};

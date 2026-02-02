@@ -2,7 +2,7 @@
 
 # Configurações Gerais
 TOTAL_ROUNDS=32
-WORKERS=5 
+WORKERS=25 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 

@@ -1,12 +1,7 @@
 'use strict';
+const { submitWithRetry } = require('../helper');
 
-class OpenWorkload {
-    constructor(fabricConnector) {
-        this.connector = fabricConnector;
-    }
-    async submitTransaction(accountId, amount) {
-        // Recebe o ID direto do JMeter (ex: r1_user_1)
-        return await this.connector.invoke('open', [accountId, amount.toString()]);
-    }
-}
-module.exports = OpenWorkload;
+module.exports.run = async (contract, args) => {
+    // args esperados: [userID, money]
+    return await submitWithRetry(contract, 'open', args);
+};

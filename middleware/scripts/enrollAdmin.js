@@ -11,7 +11,7 @@ const path = require('path');
 // --- PONTO DE CONFIGURAÇÃO PRINCIPAL ---
 
 // Caminho para o perfil de conexão
-const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-profile.json');
+const ccpPath = path.resolve(__dirname, '..', 'connection-profile.json');
 
 // Caminho para o diretório MSP do admin da Org1
 const mspPath = path.resolve(
@@ -55,7 +55,7 @@ async function main() {
         const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
 
         // Cria a carteira (wallet)
-        const walletPath = path.join(process.cwd(), 'wallet');
+        const walletPath = path.join(process.cwd(), '..', 'middleware', 'wallet');
         const wallet = await Wallets.newFileSystemWallet(walletPath);
         console.log(`Carteira (wallet) sendo usada em: ${walletPath}`);
 
