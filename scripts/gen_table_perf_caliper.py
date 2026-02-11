@@ -1,100 +1,86 @@
-import pandas as pd
-import os
 import sys
+import os
+import pandas as pd
 import glob
 import re
 
-def remove_ansi_colors(text):
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
-
-def extract_number(text):
-    try:
-        clean = re.sub(r'[^\d\.]', '', text)
-        return float(clean) if clean else 0.0
-    except: return 0.0
-
-def generate_caliper_table(results_dir, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"--- [Caliper] Gerando Tabela Consolidada (SOMA de Amostras / MÉDIA de TPS) ---")
+def parse_caliper_log(filepath):
+    """Extrai dados da tabela markdown do log do Caliper"""
+    tps = 0.0
+    lat = 0.0
+    suc = 0
+    fail = 0
     
-    rounds = ["Open", "Query", "Transfer"]
-    summary_list = []
+    try:
+        with open(filepath, 'r') as f:
+            content = f.read()
+            
+        # Regex baseada no seu log:
+        # | open | 1000 | 0 | 50.3 | 0.44 | 0.12 | 0.21 | 50.0 |
+        # Colunas: Name | Succ | Fail | Send Rate | Max Lat | Min Lat | Avg Lat | TPS |
+        
+        # Procura linhas que começam com | e tem números
+        # Grupo 1: Name, 2: Succ, 3: Fail, 7: Avg Lat, 8: TPS
+        pattern = r'\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|.*?\|.*?\|.*?\|\s*([\d\.]+)\s*\|\s*([\d\.]+)\s*\|'
+        
+        match = re.search(pattern, content)
+        if match:
+            suc = int(match.group(2))
+            fail = int(match.group(3))
+            lat = float(match.group(4)) # Avg Latency
+            tps = float(match.group(5)) # TPS
+            return suc, fail, tps, lat
 
-    for round_name in rounds:
-        files = glob.glob(os.path.join(results_dir, f"caliper*{round_name.lower()}*.log"))
-        files += glob.glob(os.path.join(results_dir, f"caliper*{round_name.lower()}*.txt"))
-        if not files:
-            files = glob.glob(os.path.join(results_dir, f"*run_*.txt"))
-            files += glob.glob(os.path.join(results_dir, f"*run_*.log"))
+    except Exception as e:
+        print(f"Erro lendo {filepath}: {e}")
+    
+    return 0, 0, 0.0, 0.0
 
-        for f in files:
-            try:
-                with open(f, 'r', encoding='utf-8', errors='ignore') as log: 
-                    clean_content = remove_ansi_colors(log.read())
-                
-                target_name = round_name.lower()
-                for line in clean_content.splitlines():
-                    line_lower = line.lower()
-                    if f"| {target_name} " in line_lower or f"|{target_name}|" in line_lower:
-                        parts = [p.strip() for p in line.split('|')]
-                        if len(parts) >= 9:
-                            try:
-                                succ = int(extract_number(parts[2]))
-                                fail = int(extract_number(parts[3]))
-                                avg_lat = extract_number(parts[7])
-                                tps = extract_number(parts[8])
-                                
-                                if succ == 0 and fail == 0 and tps == 0: continue 
+def main():
+    if len(sys.argv) < 3:
+        print("Uso: python3 gen_table_perf_caliper.py <input_dir> <output_dir>")
+        sys.exit(1)
 
-                                summary_list.append({
-                                    'Scenario': round_name,
-                                    'Samples': succ + fail, # Caliper não dá total explicito, somamos
-                                    'Success': succ,
-                                    'Fail': fail,
-                                    'Avg Latency (s)': avg_lat,
-                                    'TPS': tps
-                                })
-                                break 
-                            except: pass
-            except: pass
+    input_dir = sys.argv[1]
+    output_dir = sys.argv[2]
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    if summary_list:
-        df_final = pd.DataFrame(summary_list)
+    print(f"--- [Caliper] Extraindo Métricas de {input_dir} ---")
+    files = glob.glob(os.path.join(input_dir, "caliper_*.txt")) + glob.glob(os.path.join(input_dir, "caliper_*.log"))
+    
+    all_data = []
+
+    for f in files:
+        filename = os.path.basename(f)
+        # Tenta extrair cenário e rodada do nome do arquivo
+        match = re.search(r'caliper_(.*)_run_(\d+)', filename)
         
-        # [MUDANÇA CRUCIAL] Agregação Híbrida
-        agg_rules = {
-            'Samples': 'sum',
-            'Success': 'sum',
-            'Fail': 'sum',
-            'Avg Latency (s)': 'mean',
-            'TPS': 'mean'
-        }
-        
-        df_consolidated = df_final.groupby('Scenario').agg(agg_rules).reset_index()
-        
-        df_consolidated.to_csv(os.path.join(output_dir, "caliper_performance.csv"), index=False, float_format="%.4f")
-        
-        latex_code = df_consolidated.to_latex(
-            index=False,
-            float_format="%.3f",
-            formatters={
-                'Samples': "{:.0f}".format, 
-                'Success': "{:.0f}".format, 
-                'Fail': "{:.0f}".format
-            },
-            caption=f"Caliper Consolidated Results (Total of {len(summary_list)//3} rounds)",
-            label="tab:caliper_perf_total"
-        )
-        with open(os.path.join(output_dir, "caliper_performance.tex"), "w") as f: f.write(latex_code)
-        
-        print(f"✅ Tabela Caliper gerada.")
-        print(f"   Exemplo Open: Samples={df_consolidated.loc[df_consolidated['Scenario']=='Open', 'Samples'].values[0]} (Esperado: ~32000)")
+        if match:
+            scenario = match.group(1)
+            round_num = int(match.group(2))
+            
+            suc, fail, tps, lat = parse_caliper_log(f)
+            
+            if suc > 0 or fail > 0:
+                all_data.append({
+                    'Scenario': scenario,
+                    'Rodada': round_num,
+                    'Samples': suc + fail,
+                    'Successful': suc,
+                    'Failed': fail,
+                    'Throughput (TPS)': tps,
+                    'Avg Latency (s)': lat
+                })
+
+    if all_data:
+        df_all = pd.DataFrame(all_data)
+        output_csv = os.path.join(output_dir, "round_performance_summary.csv")
+        df_all.to_csv(output_csv, index=False)
+        print(f"✅ CSV Intermediário Caliper Gerado: {output_csv}")
     else:
-        print("⚠️  Nenhum dado Caliper encontrado.")
+        print("⚠️  Nenhum dado Caliper extraído (Verifique se os logs tem a tabela final).")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Uso: python gen_table_perf_caliper.py <input_dir> <output_dir>")
-    else:
-        generate_caliper_table(sys.argv[1], sys.argv[2])
+    main()

@@ -1,99 +1,81 @@
-import pandas as pd
-import os
 import sys
+import os
+import pandas as pd
 import glob
 import re
 
-def generate_jmeter_table(results_dir, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"--- [JMeter] Gerando Tabela Consolidada (SOMA de Amostras / MÉDIA de TPS) ---")
+def main():
+    if len(sys.argv) < 3:
+        print("Uso: python3 gen_table_perf_jmeter.py <input_dir> <output_dir>")
+        sys.exit(1)
+
+    input_dir = sys.argv[1]
+    output_dir = sys.argv[2]
     
-    rounds = ["Open", "Query", "Transfer"]
-    summary_list = []
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    # Carrega erros de backend
-    backend_err_path = os.path.join(os.path.dirname(results_dir), 'backend_errors.log')
-    backend_errors = pd.DataFrame()
-    if os.path.exists(backend_err_path):
-        try: backend_errors = pd.read_csv(backend_err_path, names=['round', 'run', 'count', 'details'])
-        except: pass
+    print(f"--- [JMeter] Extraindo Métricas de {input_dir} ---")
+    
+    # Busca todos os JTLs individuais copiados
+    files = glob.glob(os.path.join(input_dir, "results_*.jtl"))
+    
+    all_data = []
+    
+    for f in files:
+        try:
+            # Lê CSV do JMeter. Ignora linhas ruins.
+            # Seu arquivo tem header: timeStamp,elapsed,label,responseCode... success
+            df = pd.read_csv(f, on_bad_lines='skip')
+            
+            filename = os.path.basename(f)
+            # Ex: results_open_run_1.jtl
+            match = re.search(r'results_(.*)_run_(\d+)', filename)
+            
+            if match:
+                scenario = match.group(1)
+                round_num = int(match.group(2))
+            else:
+                continue
 
-    for round_name in rounds:
-        files = glob.glob(os.path.join(results_dir, f"results_{round_name.lower()}*.jtl"))
-        
-        for f in files:
-            try:
-                df = pd.read_csv(f)
-                if df.empty: continue
+            if not df.empty and 'timeStamp' in df.columns:
+                # 1. Contagem de Sucesso/Erro
+                if 'success' in df.columns:
+                    # O JTL usa "true" (texto) ou boolean. O Pandas converte.
+                    success_count = df['success'].astype(str).str.lower().eq('true').sum()
+                    error_count = len(df) - success_count
+                else:
+                    success_count = len(df)
+                    error_count = 0
 
-                match = re.search(r'run_(\d+)', f)
-                run_id = int(match.group(1)) if match else 1
-
-                total = len(df)
-                succ_jmeter = df['success'].sum()
+                # 2. TPS (Total Samples / Duration)
+                duration_ms = df['timeStamp'].max() - df['timeStamp'].min()
+                duration_sec = duration_ms / 1000.0
+                tps = len(df) / duration_sec if duration_sec > 0 else 0
                 
-                fail_backend = 0
-                if not backend_errors.empty:
-                    errs = backend_errors[(backend_errors['round'] == round_name) & (backend_errors['run'] == run_id)]
-                    if not errs.empty: fail_backend = errs['count'].sum()
+                # 3. Latência (elapsed é em ms, converter para segundos)
+                avg_lat = (df['elapsed'].mean() / 1000.0) if 'elapsed' in df.columns else 0
                 
-                succ_real = max(0, succ_jmeter - fail_backend)
-                fail_total = (total - succ_jmeter) + fail_backend
-
-                duration = (df['timeStamp'] + df['elapsed']).max() - df['timeStamp'].min()
-                duration_s = duration / 1000.0 if duration > 0 else 1
-                tps = succ_real / duration_s
-
-                summary_list.append({
-                    'Scenario': round_name,
-                    'Samples': total,
-                    'Success': succ_real,
-                    'Fail': fail_total,
-                    'Avg Latency (s)': df['elapsed'].mean() / 1000.0,
-                    'TPS': tps
+                all_data.append({
+                    'Scenario': scenario,
+                    'Rodada': round_num,
+                    'Samples': len(df),
+                    'Successful': success_count,
+                    'Failed': error_count,
+                    'Throughput (TPS)': tps,
+                    'Avg Latency (s)': avg_lat
                 })
-            except: pass
+        except Exception as e:
+            pass # Ignora arquivos corrompidos
 
-    if summary_list:
-        df_final = pd.DataFrame(summary_list)
-        
-        # [MUDANÇA CRUCIAL] Agregação Híbrida:
-        # - Contagens (Samples, Success, Fail) -> SOMA (sum)
-        # - Performance (Latência, TPS) -> MÉDIA (mean)
-        agg_rules = {
-            'Samples': 'sum',
-            'Success': 'sum',
-            'Fail': 'sum',
-            'Avg Latency (s)': 'mean',
-            'TPS': 'mean'
-        }
-        
-        df_consolidated = df_final.groupby('Scenario').agg(agg_rules).reset_index()
-        
-        # Salva CSV
-        df_consolidated.to_csv(os.path.join(output_dir, "jmeter_performance.csv"), index=False, float_format="%.4f")
-        
-        # Salva LaTeX (Formatado com inteiros para contagens e floats para tempo)
-        latex_code = df_consolidated.to_latex(
-            index=False, 
-            float_format="%.3f",
-            formatters={
-                'Samples': "{:.0f}".format, 
-                'Success': "{:.0f}".format, 
-                'Fail': "{:.0f}".format
-            },
-            caption=f"JMeter Consolidated Results (Total of {len(summary_list)//3} rounds)",
-            label="tab:jmeter_perf_total"
-        )
-        with open(os.path.join(output_dir, "jmeter_performance.tex"), "w") as f: f.write(latex_code)
-        
-        print(f"✅ Tabela JMeter gerada.")
-        print(f"   Exemplo Open: Samples={df_consolidated.loc[df_consolidated['Scenario']=='Open', 'Samples'].values[0]} (Esperado: ~32000)")
+    if all_data:
+        df_all = pd.DataFrame(all_data)
+        # Salva na pasta 'graphs' dentro do temp, pois é onde o shell script espera
+        output_csv = os.path.join(output_dir, "round_performance_summary.csv")
+        df_all.to_csv(output_csv, index=False)
+        print(f"✅ CSV Intermediário JMeter Gerado: {output_csv}")
     else:
-        print("⚠️  Nenhum dado JMeter encontrado.")
+        print("⚠️  Nenhum dado JMeter extraído.")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Uso: python gen_table_perf_jmeter.py <input_dir> <output_dir>")
-    else:
-        generate_jmeter_table(sys.argv[1], sys.argv[2])
+    main()

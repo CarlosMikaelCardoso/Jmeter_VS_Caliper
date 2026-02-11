@@ -58,7 +58,7 @@ function install_dependencies(){
     sudo apt-get install -y nodejs build-essential
     # Instala pacotes Python
     sudo apt-get install -y python3-pip
-    pip3 install pandas matplotlib seaborn 
+    pip3 install pandas matplotlib seaborn tabulate 
 }
 
 function network_down(){

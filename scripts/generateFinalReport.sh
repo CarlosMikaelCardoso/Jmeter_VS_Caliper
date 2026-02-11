@@ -4,123 +4,142 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Diretórios de Resultados
+# Diretórios
 JMETER_RESULTS_DIR="${PROJECT_ROOT}/results/jmeter_runs"
 CALIPER_RESULTS_DIR="${PROJECT_ROOT}/results/caliper_runs"
 
-# Scripts Python (Simplificados)
-GEN_GRAPH_JMETER="${SCRIPT_DIR}/generateGraphs.py"
+# Scripts Python
+GEN_GRAPH_ORIGINAL="${SCRIPT_DIR}/generateGraphs.py"
 GEN_GRAPH_CALIPER="${SCRIPT_DIR}/generateGraphsCaliper.py"
+GEN_TABLE_CPU="${SCRIPT_DIR}/gen_table_host_cpu.py"
+GEN_CHART_CPU="${SCRIPT_DIR}/generate_cpu_chart.py"
+GEN_CHART_DOCKER="${SCRIPT_DIR}/generate_resource_charts.py"
+GEN_TABLE_PERF_JMETER="${SCRIPT_DIR}/gen_table_perf_jmeter.py"
+GEN_TABLE_PERF_CALIPER="${SCRIPT_DIR}/gen_table_perf_caliper.py"
+GEN_FINAL_TABLE="${SCRIPT_DIR}/gen_final_table_formats.py"
 
 echo "========================================================"
-echo "   GERADOR DE RELATÓRIO FINAL (MÉDIA DE 32 RODADAS)"
+echo "   GERADOR DE RELATÓRIO FINAL (CONSOLIDADO ROBUSTO)"
 echo "========================================================"
 
-# Função para consolidar arquivos de várias pastas numa única para o Python processar
 process_consolidation() {
     local TYPE=$1
     local BASE_DIR=$2
-    local SCRIPT=$3
+    local GRAPH_SCRIPT=$3
     
     if [ ! -d "$BASE_DIR" ]; then
-        echo "⚠️  Diretório $TYPE não encontrado: $BASE_DIR"
+        echo "⚠️  Diretório $TYPE não encontrado."
         return
     fi
 
-    # Pasta temporária para juntar tudo
     local TEMP_DIR="${BASE_DIR}/temp_consolidation"
     local FINAL_OUTPUT="${BASE_DIR}/RELATORIO_FINAL_CONSOLIDADO"
     
     rm -rf "$TEMP_DIR" "$FINAL_OUTPUT"
     mkdir -p "$TEMP_DIR"
+    mkdir -p "${TEMP_DIR}/graphs"
 
     echo ""
     echo ">>> Processando $TYPE..."
-    echo "    1. Coletando dados de todas as rodadas..."
+    echo "    1. Coletando arquivos das 32 rodadas..."
 
-    # Varre todas as pastas round_*
     count=0
     for round_dir in "$BASE_DIR"/round_*; do
         if [ -d "$round_dir" ]; then
-            # Extrai o número da rodada (ex: round_5 -> 5)
             dirname=$(basename "$round_dir")
             round_num=$(echo "$dirname" | grep -oE '[0-9]+')
             
-            # Se não achar número, pula
-            if [ -z "$round_num" ]; then continue; fi
-
-            # --- JMETER JTL ---
-            # Copia results_open.jtl -> temp/results_open_run_5.jtl
-            for f in "$round_dir"/results_*.jtl; do
-                if [ -f "$f" ]; then
-                    base_name=$(basename "$f" .jtl)
-                    # Remove qualquer sufixo _run_X antigo para não duplicar
-                    clean_name=$(echo "$base_name" | sed -E 's/_run_[0-9]+//')
-                    cp "$f" "${TEMP_DIR}/${clean_name}_run_${round_num}.jtl"
-                fi
-            done
-
-            # --- CALIPER LOGS ---
-            # Copia caliper_open.log -> temp/caliper_open_run_5.log
-            for f in "$round_dir"/caliper_*.log; do
-                if [ -f "$f" ]; then
-                    base_name=$(basename "$f" .log)
-                    clean_name=$(echo "$base_name" | sed -E 's/_run_[0-9]+//')
-                    cp "$f" "${TEMP_DIR}/${clean_name}_run_${round_num}.log"
-                fi
-            done
-
-            # --- DOCKER STATS (Comum a ambos) ---
-            # Copia docker_stats_open.json -> temp/docker_stats_open_run_5.json
-            for f in "$round_dir"/docker_stats_*; do
-                if [ -f "$f" ]; then
-                    ext="${f##*.}" # json ou log
-                    base_name=$(basename "$f" ."$ext")
-                    clean_name=$(echo "$base_name" | sed -E 's/_run_[0-9]+//')
-                    cp "$f" "${TEMP_DIR}/${clean_name}_run_${round_num}.${ext}"
-                fi
-            done
+            if [ "$TYPE" == "JMeter" ]; then
+                # --- CORREÇÃO CRÍTICA PARA JMETER ---
+                # Renomeia JTLs para padronizar: results_<cenario>_run_<num>.jtl
+                for f in "$round_dir"/results_*.jtl; do
+                    if [ -f "$f" ]; then
+                        # Pega o nome base (ex: results_open.jtl)
+                        base_name=$(basename "$f" .jtl)
+                        
+                        # Tenta extrair o cenário (open, query, transfer)
+                        if [[ "$base_name" == *"open"* ]]; then scenario="open";
+                        elif [[ "$base_name" == *"query"* ]]; then scenario="query";
+                        elif [[ "$base_name" == *"transfer"* ]]; then scenario="transfer";
+                        else scenario="unknown"; fi
+                        
+                        # Copia com o nome PADRONIZADO que o Python espera
+                        cp "$f" "${TEMP_DIR}/results_${scenario}_run_${round_num}.jtl"
+                    fi
+                done
+                
+                # Copia JSONs do Docker (com renomeação também)
+                for f in "$round_dir"/docker_stats_*.json; do
+                    if [ -f "$f" ]; then
+                        base_name=$(basename "$f" .json)
+                        cp "$f" "${TEMP_DIR}/${base_name}_round_${round_num}.json"
+                    fi
+                done
+            else
+                # Caliper (já costuma ser padronizado, mas copiamos tudo)
+                cp "$round_dir"/caliper_*.txt "${TEMP_DIR}/" 2>/dev/null
+                cp "$round_dir"/caliper_*.log "${TEMP_DIR}/" 2>/dev/null
+                cp "$round_dir"/*docker_stats* "${TEMP_DIR}/" 2>/dev/null
+            fi
             
+            cp "$round_dir"/host_cpu_*.log "${TEMP_DIR}/" 2>/dev/null
             count=$((count+1))
         fi
     done
-
-    echo "    -> Dados coletados de $count rodadas."
     
-    if [ $count -eq 0 ]; then
-        echo "    -> Nenhuma rodada encontrada. Nada a fazer."
-        rm -rf "$TEMP_DIR"
-        return
+    # Merge JTLs para Gráficos Gerais (Só JMeter)
+    if [ "$TYPE" == "JMeter" ]; then
+        scenarios=("open" "query" "transfer")
+        for scen in "${scenarios[@]}"; do
+            # Agora busca pelos nomes padronizados que acabamos de criar
+            find "$TEMP_DIR" -name "results_${scen}_run_*.jtl" | sort -V > "${TEMP_DIR}/list_${scen}.txt"
+            if [ -s "${TEMP_DIR}/list_${scen}.txt" ]; then
+                awk 'FNR==1 && NR!=1{next;}{print}' $(cat "${TEMP_DIR}/list_${scen}.txt") > "${TEMP_DIR}/results_${scen}.jtl"
+            fi
+        done
     fi
 
-    echo "    2. Gerando gráficos unificados (Média Geral)..."
-    if [ -f "$SCRIPT" ]; then
-        # Executa o script Python na pasta temporária cheia de arquivos
-        # O script vai ler run_1, run_2... run_32 e tirar a média de tudo
-        python3 "$SCRIPT" "$TEMP_DIR" > /dev/null
-        
-        # Move a pasta 'graphs' gerada para o destino final
-        if [ -d "${TEMP_DIR}/graphs" ]; then
-            mv "${TEMP_DIR}/graphs" "$FINAL_OUTPUT"
-            echo "✅ RELATÓRIO $TYPE GERADO EM: $FINAL_OUTPUT"
-        else
-            echo "❌ Erro: O script Python não gerou a pasta 'graphs'."
-        fi
+    echo "    2. Gerando Gráficos de Distribuição..."
+    if [ -f "$GRAPH_SCRIPT" ]; then
+        python3 "$GRAPH_SCRIPT" "$TEMP_DIR" > /dev/null
+    fi
+
+    echo "    3. Gerando Gráficos de Recursos..."
+    if [ -f "$GEN_TABLE_CPU" ]; then
+        python3 "$GEN_TABLE_CPU" "$TEMP_DIR" "${TEMP_DIR}/host_cpu_summary.csv" > /dev/null
+        python3 "$GEN_CHART_CPU" "$TEMP_DIR" "${TEMP_DIR}" > /dev/null
+    fi
+    if [ -f "$GEN_CHART_DOCKER" ]; then
+        python3 "$GEN_CHART_DOCKER" "$TEMP_DIR" "${TEMP_DIR}" > /dev/null
+    fi
+
+    echo "    4. Extraindo Métricas para Tabela Final..."
+    # Executa scripts de extração
+    if [ "$TYPE" == "JMeter" ]; then
+        python3 "$GEN_TABLE_PERF_JMETER" "$TEMP_DIR" "${TEMP_DIR}/graphs"
     else
-        echo "❌ Script Python não encontrado: $SCRIPT"
+        python3 "$GEN_TABLE_PERF_CALIPER" "$TEMP_DIR" "${TEMP_DIR}/graphs"
     fi
 
-    # Limpa a sujeira
+    echo "    5. Gerando PDF/LaTeX Final..."
+    INPUT_CSV="${TEMP_DIR}/graphs/round_performance_summary.csv"
+    if [ -f "$GEN_FINAL_TABLE" ]; then
+        python3 "$GEN_FINAL_TABLE" "$INPUT_CSV" "${TEMP_DIR}/graphs"
+    fi
+
+    echo "    6. Finalizando..."
+    mkdir -p "$FINAL_OUTPUT"
+    
+    mv "${TEMP_DIR}"/*.png "$FINAL_OUTPUT/" 2>/dev/null
+    mv "${TEMP_DIR}"/graphs/*.csv "$FINAL_OUTPUT/" 2>/dev/null
+    mv "${TEMP_DIR}"/graphs/*.tex "$FINAL_OUTPUT/" 2>/dev/null
+    mv "${TEMP_DIR}"/graphs/*.pdf "$FINAL_OUTPUT/" 2>/dev/null
+    
     rm -rf "$TEMP_DIR"
+    
+    echo "✅ RELATÓRIO $TYPE PRONTO EM: $FINAL_OUTPUT"
 }
 
-# Executa para JMeter
-process_consolidation "JMeter" "$JMETER_RESULTS_DIR" "$GEN_GRAPH_JMETER"
-
-# Executa para Caliper
+chmod +x "$SCRIPT_DIR"/*.py
+process_consolidation "JMeter" "$JMETER_RESULTS_DIR" "$GEN_GRAPH_ORIGINAL"
 process_consolidation "Caliper" "$CALIPER_RESULTS_DIR" "$GEN_GRAPH_CALIPER"
-
-echo ""
-echo "========================================================"
-echo "   CONSOLIDAÇÃO CONCLUÍDA"
-echo "========================================================"
