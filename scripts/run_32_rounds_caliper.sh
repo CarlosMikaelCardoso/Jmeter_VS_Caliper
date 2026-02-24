@@ -15,6 +15,7 @@ mkdir -p "${RESULTS_DIR}"
 mkdir -p "${HOST_MONITOR_DIR}"
 
 echo "[INFO] INICIANDO BATERIA DE $TOTAL_ROUNDS RODADAS (Caliper)"
+start_time=$(date +%s%3N) # Monitora o tempo de execução da bateria de testes.
 
 for (( i=1; i<=TOTAL_ROUNDS; i++ ))
 do
@@ -53,4 +54,8 @@ do
     sleep 2
 done
 
-echo "[INFO] BATERIA CALIPER CONCLUÍDA"
+end_time=$(date +%s%3N)
+
+duracao=$((end_time - start_time))
+minutos=$(awk "BEGIN {print $duracao/60000}")
+echo "[INFO] BATERIA CALIPER CONCLUÍDA EM $minutos" MINUTOS

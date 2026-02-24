@@ -16,6 +16,7 @@ mkdir -p "${HOST_MONITOR_DIR}"
 
 echo "[RUN] INICIANDO BATERIA DE $TOTAL_ROUNDS RODADAS (JMeter)"
 echo "[INFO] Workers definidos: $WORKERS"
+start_time=$(date +%s%3N) # Monitora o tempo de execução da bateria de testes.
 
 for (( i=1; i<=TOTAL_ROUNDS; i++ ))
 do
@@ -79,5 +80,8 @@ do
     sleep 10
 done
 
-echo "[INFO] BATERIA DE TESTES CONCLUÍDA"
-echo "[INFO] Para gerar o comparativo final, execute: ./generate_final_report.sh"
+end_time=$(date +%s%3N)
+duracao=$((end_time - start_time))
+minutos=$(awk "BEGIN {print $duracao/60000}")
+echo "[INFO] BATERIA JMETER CONCLUÍDA EM $minutos" MINUTOS
+echo "[INFO] Para gerar o comparativo final, execute: ./generateFinalReport.sh"
