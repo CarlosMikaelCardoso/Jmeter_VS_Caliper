@@ -25,6 +25,24 @@ export JAVA_HOME="${PROJECT_ROOT}/${JAVA_DIR_NAME}"
 API_HOST=$(hostname -I | awk '{print $1}')
 API_PORT="3000"
 MONITOR_PORT="3002"
+# Recebe o caminho do log como 1º argumento. Se não passar, usa 'api.log' no local atual.
+LOG_OUTPUT="${1:-api.log}"
+
+echo "Iniciando API Middleware..."
+echo "Logs serão salvos em: $LOG_OUTPUT"
+
+# Navega até o diretório do middleware e inicia o node
+# O '2>&1' redireciona erros também para o log
+# O '&' roda em background para não travar o terminal
+cd ../middleware
+nohup node api.js > "$LOG_OUTPUT" 2>&1 &
+
+API_PID=$!
+echo "API iniciada com PID: $API_PID"
+
+# Salva o PID para poder matar o processo depois (no script de 32 rodadas)
+echo $API_PID > ../api_pid.txt
+sleep 5
 
 # Parâmetros
 NUM_USERS=${1:-5}

@@ -44,12 +44,12 @@ do
     sar -u 1 > "$HOST_LOG" &
     MONITOR_PID=$!
 
-    # 3. EXECUTAR OS TESTES JMeter (Chama o Executor)
+    # 2. EXECUTAR OS TESTES JMeter (Chama o Executor)
     echo "[RUN] Executando JMeter..."
     # Passamos $i como argumento para que o executor saiba qual é a rodada atual
-    ./run_jmeter_api.sh $WORKERS $i
+    ./run_jmeter_api.sh "$ROUND_DIR/api.log" $WORKERS $i 
 
-    # 4. PARAR MONITORAMENTO
+    # 3. PARAR MONITORAMENTO
     kill $MONITOR_PID
     echo "[INFO] Monitoramento parado."
 
@@ -59,7 +59,7 @@ do
         mv "$HOST_LOG" "${ROUND_FOLDER}/"
     fi
 
-    # 5. GERAR GRÁFICOS (COM DEBUG)
+    # 4. GERAR GRÁFICOS (COM DEBUG)
     echo "[INFO] Gerando gráficos exclusivos desta rodada..."
     
     if [ ! -f "$GENERATE_GRAPHS_SCRIPT" ]; then
@@ -75,7 +75,14 @@ do
         fi
     fi
 
-    # 5. PAUSA / RESFRIAMENTO
+    # 5. Derruba a API após o teste para limpar a memória para a próxima rodada
+    if [ -f api_pid.txt ]; then
+        kill -9 $(cat api_pid.txt)
+        rm api_pid.txt
+        echo "API da rodada $i encerrada."
+    fi
+
+    # 6. PAUSA / RESFRIAMENTO
     echo "[INFO] Rodada $i finalizada. Aguardando 10s para estabilização..."
     sleep 10
 done

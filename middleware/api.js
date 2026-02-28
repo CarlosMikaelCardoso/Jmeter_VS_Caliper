@@ -5,6 +5,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { connectToNetwork } = require('./workloads/fabric-connector');
 const logger = require('./logger');
+const { v4: uuidv4 } = require('uuid'); // Certifique-se de ter um gerador de ID
 
 // Importa os workloads
 const workloads = {
@@ -26,6 +27,11 @@ let contract = null;
 
 // Endpoint Genérico de Invoke (Open e Transfer)
 app.post('/api/invoke', async (req, res) => {
+    const reqId = uuidv4().split('-')[0]; // ID curto para rastreio
+    
+    // [T1] Timestamp de chegada (Nível Aplicação)
+    console.log(`[${new Date().toISOString()}] ReqID:${reqId} Recebido do JMeter`);
+
     try {
         // Reconexão
         if (!contract) {
@@ -40,6 +46,9 @@ app.post('/api/invoke', async (req, res) => {
             return res.status(400).json({ error: `Função '${functionName}' não mapeada nos workloads.` });
         }
 
+        // [T2] Timestamp imediatamente antes de enviar ao Fabric
+        console.log(`[${new Date().toISOString()}] ReqID:${reqId} Enviado para Blockchain`);
+        
         // Executa o workload específico (com retry embutido)
         const response = await workloads[functionName].run(contract, args);
 
