@@ -58,7 +58,7 @@ function install_dependencies(){
     sudo apt-get install -y nodejs build-essential
     # Instala pacotes Python
     sudo apt-get install -y python3-pip
-    pip3 install pandas matplotlib seaborn tabulate 
+    pip3 install pandas matplotlib seaborn tabulate beautifulsoup4 numpy
 }
 
 function network_down(){
@@ -150,5 +150,4 @@ main() {
     configure_middleware
 }
 
-# Executa a função principal
 main "$@"

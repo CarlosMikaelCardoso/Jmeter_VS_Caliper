@@ -45,8 +45,8 @@ echo $API_PID > ../api_pid.txt
 sleep 5
 
 # Parâmetros
-NUM_USERS=${1:-5}
-ROUND_ID=${2:-1}
+NUM_USERS=${2:-5}
+ROUND_ID=${3:-1}
 
 # --- CONFIGURAÇÃO DE DIRETÓRIO POR RODADA ---
 # Aqui criamos a pasta específica desta rodada

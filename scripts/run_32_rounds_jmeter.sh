@@ -46,15 +46,17 @@ do
 
     # 2. EXECUTAR OS TESTES JMeter (Chama o Executor)
     echo "[RUN] Executando JMeter..."
+    ROUND_FOLDER="${RESULTS_DIR}/round_${i}"
+    mkdir -p "$ROUND_FOLDER"
     # Passamos $i como argumento para que o executor saiba qual é a rodada atual
-    ./run_jmeter_api.sh "$ROUND_DIR/api.log" $WORKERS $i 
+    ./run_jmeter_api.sh "$ROUND_FOLDER/api.log" $WORKERS $i 
 
     # 3. PARAR MONITORAMENTO
     kill $MONITOR_PID
     echo "[INFO] Monitoramento parado."
 
     # Mover log de CPU para a pasta da rodada
-    ROUND_FOLDER="${RESULTS_DIR}/round_${i}"
+    
     if [ -d "$ROUND_FOLDER" ] && [ -f "$HOST_LOG" ]; then
         mv "$HOST_LOG" "${ROUND_FOLDER}/"
     fi
@@ -74,12 +76,13 @@ do
             echo "[INFO] FALHA na geração dos gráficos. Verifique se o 'pandas' está instalado."
         fi
     fi
-
-    # 5. Derruba a API após o teste para limpar a memória para a próxima rodada
-    if [ -f api_pid.txt ]; then
-        kill -9 $(cat api_pid.txt)
-        rm api_pid.txt
-        echo "API da rodada $i encerrada."
+    
+    PID_FILE="${PROJECT_ROOT}/api_pid.txt"
+    if [ -f "$PID_FILE" ]; then
+        echo "[INFO] Encerrando API da rodada $i (PID: $(cat "$PID_FILE"))..."
+        kill -9 $(cat "$PID_FILE") 2>/dev/null
+        rm "$PID_FILE"
+        sleep 2 # Tempo para o SO liberar a porta
     fi
 
     # 6. PAUSA / RESFRIAMENTO
