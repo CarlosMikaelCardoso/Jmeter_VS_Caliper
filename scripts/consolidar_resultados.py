@@ -3,7 +3,7 @@ import csv
 import glob
 import re
 import numpy as np
-import pandas as pd # Adicionado pandas para facilitar a leitura de JTLs grandes
+import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime
 
@@ -13,7 +13,7 @@ def processar_jmeter(base_dir):
         latencies = []
         df_list = []
         
-        # Overhead da API (Mantido conforme sua captura de logs)
+        # --- [CAPTURA DE OVERHEAD DA API] ---
         api_log_path = os.path.join(base_dir, f'round_{rodada}', 'api.log')
         overhead_medio, overhead_variancia = 0, 0
         
@@ -34,12 +34,11 @@ def processar_jmeter(base_dir):
                 overhead_medio = round(np.mean(deltas), 4)
                 overhead_variancia = round(np.var(deltas), 4)
 
-        # Processamento do JTL para TPS Real
+        # --- [PROCESSAMENTO JTL PARA TPS REAL] ---
         jtl_files = glob.glob(os.path.join(base_dir, f'round_{rodada}', '*.jtl'))
         for jtl in jtl_files:
             try:
                 df = pd.read_csv(jtl)
-                # Filtrar apenas sucessos para o cálculo de TPS e Latência
                 df_success = df[df['success'] == True].copy()
                 if not df_success.empty:
                     df_list.append(df_success)
@@ -49,20 +48,15 @@ def processar_jmeter(base_dir):
 
         if df_list:
             df_full = pd.concat(df_list)
-            # --- [CÁLCULO TPS REAL JMETER] ---
-            # Tempo total = (Último início + sua duração) - Primeiro início
             tempo_total_ms = (df_full['timeStamp'].max() + df_full['elapsed'].max()) - df_full['timeStamp'].min()
             tps_real = len(df_full) / (tempo_total_ms / 1000.0) if tempo_total_ms > 0 else 0
-            
-            lat_media = np.mean(latencies)
-            lat_p99 = np.percentile(latencies, 99)
             
             resultados.append({
                 'ID_Rodada': rodada,
                 'Ferramenta': 'JMeter',
-                'TPS_Nativo': round(tps_real, 2), # TPS Real calculado
-                'Latencia_Media_Nativa': round(lat_media, 2),
-                'Latencia_P99_Nativa': round(lat_p99, 2),
+                'TPS_Nativo': round(tps_real, 2),
+                'Latencia_Media_Nativa': round(np.mean(latencies), 2),
+                'Latencia_P99_Nativa': round(np.percentile(latencies, 99), 2),
                 'Overhead_Medio_ms': overhead_medio,
                 'Overhead_Variancia': overhead_variancia
             })
@@ -80,7 +74,6 @@ def processar_caliper(base_dir):
                 soup = BeautifulSoup(f, 'html.parser')
                 for tabela in soup.find_all('table'):
                     headers = [th.text.strip() for th in tabela.find_all('th')]
-                    # No Caliper, o TPS já vem calculado nativamente na coluna "Throughput (TPS)"
                     if 'Throughput (TPS)' in headers:
                         idx_tps = headers.index('Throughput (TPS)')
                         idx_avg = headers.index('Avg Latency (s)')
@@ -97,51 +90,55 @@ def processar_caliper(base_dir):
             resultados.append({
                 'ID_Rodada': rodada,
                 'Ferramenta': 'Caliper',
-                'TPS_Nativo': round(np.mean(tps_list), 2), # Média do TPS reportado pelo Caliper
+                'TPS_Nativo': round(np.mean(tps_list), 2),
                 'Latencia_Media_Nativa': round(np.mean(lat_medias), 2),
                 'Latencia_P99_Nativa': round(np.mean(lat_p99s), 2),
                 'Overhead_Medio_ms': 0,
                 'Overhead_Variancia': 0
             })
-            
     return resultados
 
-def aplicar_saneamento(dados, log_file):
+def aplicar_saneamento(dados):
     caliper_data = [d for d in dados if d['Ferramenta'] == 'Caliper']
     jmeter_data = [d for d in dados if d['Ferramenta'] == 'JMeter']
     dados_finais = []
     
-    # Ordem: JMeter primeiro no CSV
-    for ferramenta, dataset in [('JMeter', jmeter_data), ('Caliper', caliper_data)]:
+    for dataset in [jmeter_data, caliper_data]:
         if not dataset: continue
+        # Remover Rodada 1 e Outlier
         dataset_limpo = [d for d in dataset if d['ID_Rodada'] != 1]
-        log_file.write(f"[{ferramenta}] Rodada 1 descartada (Cold Start).\n")
-        
         if dataset_limpo:
             latencias = [d['Latencia_Media_Nativa'] for d in dataset_limpo]
-            media_geral = np.mean(latencias)
-            outlier = max(dataset_limpo, key=lambda x: abs(x['Latencia_Media_Nativa'] - media_geral))
+            media = np.mean(latencias)
+            outlier = max(dataset_limpo, key=lambda x: abs(x['Latencia_Media_Nativa'] - media))
             dataset_limpo.remove(outlier)
-            log_file.write(f"[{ferramenta}] Rodada {outlier['ID_Rodada']} descartada (Outlier).\n")
-        
         dados_finais.extend(dataset_limpo[:30])
     return dados_finais
 
 if __name__ == "__main__":
-    jmeter_path = '../results/jmeter_runs'
-    caliper_path = '../results/caliper_runs'
+    # 1. Processamento Inicial
+    brutos = processar_jmeter('../results/jmeter_runs') + processar_caliper('../results/caliper_runs')
+    validados = aplicar_saneamento(brutos)
     
-    dados_brutos = []
-    dados_brutos.extend(processar_jmeter(jmeter_path))
-    dados_brutos.extend(processar_caliper(caliper_path))
+    df_mestre = pd.DataFrame(validados)
     
-    with open('saneamento_log.txt', 'w', encoding='utf-8') as log:
-        dados_validados = aplicar_saneamento(dados_brutos, log)
-        
-    with open('planilha_analise_consolidada.csv', 'w', newline='', encoding='utf-8') as f:
-        fieldnames = ['ID_Rodada', 'Ferramenta', 'TPS_Nativo', 'Latencia_Media_Nativa', 'Latencia_P99_Nativa', 'Overhead_Medio_ms', 'Overhead_Variancia']
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(dados_validados)
+    # 2. Cálculos de Comparação Justa
+    jmeter_df = df_mestre[df_mestre['Ferramenta'] == 'JMeter'].copy()
+    caliper_df = df_mestre[df_mestre['Ferramenta'] == 'Caliper'].copy()
     
-    print("Consolidação concluída com sucesso.")
+    # Latencia Ajustada
+    jmeter_df['Latencia_JMeter_Ajustada'] = jmeter_df['Latencia_Media_Nativa'] - jmeter_df['Overhead_Medio_ms']
+    
+    # Merge para Comparação e Erro
+    df_final = pd.merge(
+        jmeter_df[['ID_Rodada', 'TPS_Nativo', 'Latencia_Media_Nativa', 'Latencia_JMeter_Ajustada', 'Overhead_Medio_ms', 'Overhead_Variancia']],
+        caliper_df[['ID_Rodada', 'Latencia_Media_Nativa', 'TPS_Nativo']].rename(columns={'Latencia_Media_Nativa': 'Lat_Caliper_Nativa', 'TPS_Nativo': 'TPS_Caliper'}),
+        on='ID_Rodada'
+    )
+    
+    # Erro Relativo %
+    df_final['Erro_Relativo_%'] = (abs(df_final['Lat_Caliper_Nativa'] - df_final['Latencia_JMeter_Ajustada']) / df_final['Lat_Caliper_Nativa']) * 100
+    
+    # 3. Exportação
+    df_final.to_csv('planilha_analise_consolidada.csv', index=False)
+    print("Planilha mestre gerada com métricas de Latência Ajustada e Erro Relativo.")
