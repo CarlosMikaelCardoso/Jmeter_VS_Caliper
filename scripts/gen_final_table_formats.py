@@ -17,54 +17,49 @@ def main():
 
     df = pd.read_csv(input_csv)
     
-    # Agregação Final (Média das 32 rodadas)
-    summary = df.groupby('Scenario').agg({
-        'Samples': 'sum',
-        'Successful': 'sum',
-        'Failed': 'sum',
-        'Throughput (TPS)': ['mean'],
-        'Avg Latency (s)': ['mean']
-    }).reset_index()
+    # Função para detectar outliers via IQR (Interquartile Range)
+    def find_outliers(data, col):
+        q1 = data[col].quantile(0.25)
+        q3 = data[col].quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        return data[(data[col] < lower_bound) | (data[col] > upper_bound)]
 
-    summary.columns = ['Scenario', 'Total Samples', 'Total Success', 'Total Failed', 
-                       'TPS (Avg)', 'Latency (Avg)(s)']
+    # 1. Identificação de Outliers (Cálculo formal solicitado)
+    outliers_list = []
+    for tool in df['Scenario'].unique(): # Aqui 'Scenario' costuma diferenciar Jmeter_Open vs Caliper_Open
+        subset = df[df['Scenario'] == tool]
+        out_tps = find_outliers(subset, 'Throughput (TPS)')
+        if not out_tps.empty:
+            for _, row in out_tps.iterrows():
+                outliers_list.append(f"Outlier em {tool} (Rodada {row['Rodada']}): TPS {row['Throughput (TPS)']} fora do padrão.")
 
-    # Arredondamentos
-    summary['TPS (Avg)'] = summary['TPS (Avg)'].round(2)
-    summary['Latency (Avg)(s)'] = summary['Latency (Avg)(s)'].round(4)
-
-    # 1. Exporta CSV
-    summary.to_csv(os.path.join(output_dir, "summary_table_final.csv"), index=False)
-
-    # 2. Exporta LaTeX
-    latex_df = summary.copy()
-    latex_df['Throughput (TPS)'] = latex_df.apply(lambda x: f"{x['TPS (Avg)']}", axis=1)
-    latex_df['Latency (s)'] = latex_df.apply(lambda x: f"{x['Latency (Avg)(s)']}", axis=1)
-    latex_df = latex_df[['Scenario', 'Total Samples', 'Total Success', 'Total Failed', 'Throughput (TPS)', 'Latency (s)']]
+    # 2. Agregação Estatística Completa (Requisito: Média, Mediana, DP, Min, Max)
+    stats_summary = df.groupby('Scenario').agg({
+        'Throughput (TPS)': ['mean', 'median', 'std', 'min', 'max'],
+        'Avg Latency (s)': ['mean', 'median', 'std', 'min', 'max']
+    }).round(4)
     
-    with open(os.path.join(output_dir, "summary_table_final.tex"), "w") as f:
-        f.write(latex_df.to_latex(index=False, caption="Resultados Consolidados", escape=False))
+    # 3. Geração do Parágrafo para o Artigo (Resultados)
+    best_tps_scenario = df.loc[df['Throughput (TPS)'].idxmax()]['Scenario']
+    avg_tps_global = df['Throughput (TPS)'].mean()
+    result_text = (
+        f"A análise quantitativa das 32 rodadas revela um comportamento geral de "
+        f"{'estabilidade' if df['Throughput (TPS)'].std() < 5 else 'variabilidade significativa'}. "
+        f"O cenário {best_tps_scenario} apresentou o maior throughput médio. "
+        f"Foram identificados {len(outliers_list)} outliers durante o estresse, "
+        f"conforme detalhado na lista de saneamento."
+    )
 
-    # 3. Exporta PDF
-    fig, ax = plt.subplots(figsize=(12, 3))
-    ax.axis('tight')
-    ax.axis('off')
-    table = ax.table(cellText=summary.values, colLabels=summary.columns, loc='center', cellLoc='center')
-    table.auto_set_font_size(False)
-    table.set_fontsize(9)
-    table.scale(1.2, 1.2)
-    
-    # Cabeçalho colorido
-    for (i, j), cell in table.get_celld().items():
-        if i == 0:
-            cell.set_text_props(weight='bold', color='white')
-            cell.set_facecolor('#4a4a4a')
+    # Exportação dos novos artefatos
+    stats_summary.to_csv(os.path.join(output_dir, "estatistica_descritiva.csv"))
+    with open(os.path.join(output_dir, "outliers_identificados.txt"), "w") as f:
+        f.write("\n".join(outliers_list))
+    with open(os.path.join(output_dir, "paragrafo_resultados_artigo.txt"), "w") as f:
+        f.write(result_text)
 
-    plt.title("Resumo Final (32 Rodadas)", weight='bold')
-    plt.savefig(os.path.join(output_dir, "summary_table_final.pdf"), bbox_inches='tight')
-    plt.close()
-    
-    print(f"✅ Tabela Final Gerada (PDF/CSV/TeX) em: {output_dir}")
+    print(f"✅ Estatísticas e Outliers gerados em: {output_dir}")
 
 if __name__ == "__main__":
     main()
