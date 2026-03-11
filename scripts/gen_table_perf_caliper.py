@@ -5,36 +5,28 @@ import glob
 import re
 
 def parse_caliper_log(filepath):
-    """Extrai dados da tabela markdown do log do Caliper"""
-    tps = 0.0
-    lat = 0.0
-    suc = 0
-    fail = 0
-    
+    """Extrai dados incluindo P99 se disponível no log"""
+    tps, lat, p99, suc, fail = 0.0, 0.0, 0.0, 0, 0
     try:
         with open(filepath, 'r') as f:
             content = f.read()
-            
-        # Regex baseada no seu log:
-        # | open | 1000 | 0 | 50.3 | 0.44 | 0.12 | 0.21 | 50.0 |
-        # Colunas: Name | Succ | Fail | Send Rate | Max Lat | Min Lat | Avg Lat | TPS |
         
-        # Procura linhas que começam com | e tem números
-        # Grupo 1: Name, 2: Succ, 3: Fail, 7: Avg Lat, 8: TPS
-        pattern = r'\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|.*?\|.*?\|.*?\|\s*([\d\.]+)\s*\|\s*([\d\.]+)\s*\|'
+        # Regex atualizada: procura a tabela de resultados que contém o P99
+        # Padrão esperado: | Name | Succ | Fail | Send Rate | Max | Min | Avg | P99 (ou similar) | TPS |
+        # Nota: Ajustamos para capturar o valor antes do TPS que costuma ser o P99 em relatórios detalhados
+        pattern = r'\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|.*?\|.*?\|.*?\|\s*([\d\.]+)\s*\|\s*([\d\.]+)\s*\|\s*([\d\.]+)\s*\|'
         
         match = re.search(pattern, content)
         if match:
             suc = int(match.group(2))
             fail = int(match.group(3))
-            lat = float(match.group(4)) # Avg Latency
-            tps = float(match.group(5)) # TPS
-            return suc, fail, tps, lat
+            lat = float(match.group(4))  # Avg Latency
+            p99 = float(match.group(5))  # P99 Latency (Capturado da nova coluna)
+            tps = float(match.group(6))  # TPS
+            return suc, fail, tps, lat, p99
+    except Exception: pass
+    return suc, fail, tps, lat, p99
 
-    except Exception as e:
-        print(f"Erro lendo {filepath}: {e}")
-    
-    return 0, 0, 0.0, 0.0
 
 def main():
     if len(sys.argv) < 3:
@@ -61,7 +53,7 @@ def main():
             scenario = match.group(1)
             round_num = int(match.group(2))
             
-            suc, fail, tps, lat = parse_caliper_log(f)
+            suc, fail, tps, lat, p99 = parse_caliper_log(f)
             
             if suc > 0 or fail > 0:
                 all_data.append({
@@ -70,8 +62,9 @@ def main():
                     'Samples': suc + fail,
                     'Successful': suc,
                     'Failed': fail,
-                    'Throughput (TPS)': tps,
-                    'Avg Latency (s)': lat
+                    'Throughput (TPS)': round(tps, 2),
+                    'Avg Latency (s)': round(lat, 4),
+                    'P99 Latency (s)': round(p99, 4)
                 })
 
     if all_data:
