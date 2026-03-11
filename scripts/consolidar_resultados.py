@@ -101,7 +101,7 @@ def processar_caliper(base_dir):
             })
     return resultados
 
-def aplicar_saneamento(dados):
+def aplicar_saneamento(dados, log_file):
     caliper_data = [d for d in dados if d['Ferramenta'] == 'Caliper']
     jmeter_data = [d for d in dados if d['Ferramenta'] == 'JMeter']
     dados_finais = []
@@ -109,17 +109,24 @@ def aplicar_saneamento(dados):
     # Processar JMeter primeiro para ordem no CSV
     for dataset in [jmeter_data, caliper_data]:
         if not dataset: continue
+        ferramenta = dataset[0]['Ferramenta']
+        
         # 1. Remover Rodada 1 (Cold Start)
         dataset_limpo = [d for d in dataset if d['ID_Rodada'] != 1]
+        log_file.write(f"[{ferramenta}] Rodada 1 descartada por Cold Start.\n")
+        
         # 2. Remover Outlier
         if dataset_limpo:
             latencias = [d['Latencia_Media_Nativa'] for d in dataset_limpo]
             media = np.mean(latencias)
             outlier = max(dataset_limpo, key=lambda x: abs(x['Latencia_Media_Nativa'] - media))
             dataset_limpo.remove(outlier)
+            log_file.write(f"[{ferramenta}] Rodada {outlier['ID_Rodada']} descartada por Outlier (Latência: {outlier['Latencia_Media_Nativa']} ms).\n")
+            
         # 3. Pegar as 30 rodadas estáveis
         dados_finais.extend(dataset_limpo[:30])
     return dados_finais
+
 
 if __name__ == "__main__":
     jmeter_path = '../results/jmeter_runs'
@@ -127,7 +134,8 @@ if __name__ == "__main__":
     
     # Processamento e Saneamento
     brutos = processar_jmeter(jmeter_path) + processar_caliper(caliper_path)
-    validados = aplicar_saneamento(brutos)
+    with open('saneamento_log.txt', 'w', encoding='utf-8') as log:
+        validados = aplicar_saneamento(brutos, log)
     
     # Criar DataFrame Base
     df_mestre = pd.DataFrame(validados)
