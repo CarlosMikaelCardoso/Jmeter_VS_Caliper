@@ -55,15 +55,17 @@ def main():
                 
                 # 3. Latência (elapsed é em ms, converter para segundos)
                 avg_lat = (df['elapsed'].mean() / 1000.0) if 'elapsed' in df.columns else 0
-                
+                p99_lat = (df['elapsed'].quantile(0.99) / 1000.0) if 'elapsed' in df.columns else 0 # Nova métrica
+
                 all_data.append({
                     'Scenario': scenario,
                     'Rodada': round_num,
                     'Samples': len(df),
                     'Successful': success_count,
                     'Failed': error_count,
-                    'Throughput (TPS)': tps,
-                    'Avg Latency (s)': avg_lat
+                    'Throughput (TPS)': round(tps, 2),
+                    'Avg Latency (s)': round(avg_lat, 4),
+                    'P99 Latency (s)': round(p99_lat, 4)
                 })
         except Exception as e:
             pass # Ignora arquivos corrompidos
