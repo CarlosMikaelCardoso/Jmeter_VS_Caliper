@@ -18,6 +18,9 @@ GEN_TABLE_PERF_JMETER="${SCRIPT_DIR}/gen_table_perf_jmeter.py"
 GEN_TABLE_PERF_CALIPER="${SCRIPT_DIR}/gen_table_perf_caliper.py"
 GEN_FINAL_TABLE="${SCRIPT_DIR}/gen_final_table_formats.py"
 
+SUMMARY_CSV="${temp_dir}/graphs/round_performance_summary.csv"
+OUTPUT_GRAPHS="${temp_dir}/graphs/"
+
 echo "========================================================"
 echo "   GERADOR DE RELATÓRIO FINAL (CONSOLIDADO ROBUSTO)"
 echo "========================================================"
@@ -143,3 +146,5 @@ process_consolidation() {
 chmod +x "$SCRIPT_DIR"/*.py
 process_consolidation "JMeter" "$JMETER_RESULTS_DIR" "$GEN_GRAPH_ORIGINAL"
 process_consolidation "Caliper" "$CALIPER_RESULTS_DIR" "$GEN_GRAPH_CALIPER"
+python3 analise_estatistica_inferencial.py "/home/gercom/Jmeter_VS_Caliper/results/jmeter_runs/RELATORIO_FINAL_CONSOLIDADO/round_performance_summary.csv" "/home/gercom/Jmeter_VS_Caliper/results/jmeter_runs/RELATORIO_FINAL_CONSOLIDADO/"
+python3 analise_estatistica_inferencial.py "/home/gercom/Jmeter_VS_Caliper/results/caliper_runs/RELATORIO_FINAL_CONSOLIDADO/round_performance_summary.csv" "/home/gercom/Jmeter_VS_Caliper/results/caliper_runs/RELATORIO_FINAL_CONSOLIDADO/"
