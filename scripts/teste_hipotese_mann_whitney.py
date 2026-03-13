@@ -24,7 +24,7 @@ def executar_teste_hipotese(jmeter_csv, caliper_csv, output_dir):
 
         # Padronização de nomes de cenários para comparação
         # Mapeia 'log_transfer' para 'transfer', etc.
-        df_c['Scenario'] = df_c['Scenario'].str.replace('log_', '')
+        df_c['Scenario'] = df_c['Scenario'].str.replace('log_', '').str.lower()
         
         resultados = []
         ALPHA = 0.05

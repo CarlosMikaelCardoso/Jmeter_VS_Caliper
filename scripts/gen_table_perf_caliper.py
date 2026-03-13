@@ -70,7 +70,7 @@ def main():
         df = pd.DataFrame(all_data)
         
         # Padronização de nomes e ordenação rigorosa
-        df['Scenario'] = df['Scenario'].str.replace('log_', '').str.capitalize()
+        df['Scenario'] = df['Scenario'].str.replace('log_', '')
         df = df.sort_values(by=['Scenario', 'Rodada'])
 
         # Salva o CSV organizado (Delimitador padrão para compatibilidade)
