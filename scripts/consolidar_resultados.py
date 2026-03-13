@@ -95,7 +95,7 @@ def processar_caliper(base_dir):
                 'Ferramenta': 'Caliper',
                 'TPS_Nativo': round(np.mean(tps_list), 2),
                 'Latencia_Media_Nativa': round(np.mean(lat_medias), 2),
-                'Latencia_P99_Nativa': round(np.mean(lat_p99s), 2),
+                'Latencia_P99_Nativa': 0,
                 'Overhead_Medio_ms': 0,
                 'Overhead_Variancia': 0
             })

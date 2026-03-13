@@ -64,16 +64,56 @@ def main():
                     'Failed': fail,
                     'Throughput (TPS)': round(tps, 2),
                     'Avg Latency (s)': round(lat, 4),
-                    'P99 Latency (s)': 0.0 # O log de texto não provê P99, setamos 0.0 para manter compatibilidade
                 })
 
     if all_data:
-        df_all = pd.DataFrame(all_data)
-        output_csv = os.path.join(output_dir, "round_performance_summary.csv")
-        df_all.to_csv(output_csv, index=False)
-        print(f"✅ CSV Intermediário Caliper Gerado: {output_csv}")
+        df = pd.DataFrame(all_data)
+        
+        # Padronização de nomes e ordenação rigorosa
+        df['Scenario'] = df['Scenario'].str.replace('log_', '').str.capitalize()
+        df = df.sort_values(by=['Scenario', 'Rodada'])
+
+        # Salva o CSV organizado (Delimitador padrão para compatibilidade)
+        csv_path = os.path.join(output_dir, "round_performance_summary.csv")
+        df.to_csv(csv_path, index=False, sep=',')
+        print(f"✅ CSV Intermediário Caliper Organizado: {csv_path}")
+
+        # Geração do LaTeX detalhado (Padrão Unificado: todas as rodadas + linha de resumo plana)
+        tex_path = os.path.join(output_dir, "round_performance_summary.tex")
+        with open(tex_path, 'w') as f:
+            f.write("\\begin{table}[ht]\n\\centering\n")
+            f.write("\\caption{Caliper Detailed Round Performance Summary}\n")
+            f.write("\\label{tab:caliper_detailed_rounds}\n")
+            f.write("\\begin{tabular}{lrrrrr}\n\\toprule\n")
+            f.write("Scenario & Samples & Success & Fail & Avg Latency (s) & TPS \\\\\n\\midrule\n")
+
+            for scenario in df['Scenario'].unique():
+                sub = df[df['Scenario'] == scenario]
+                
+                # 1. Escreve as 32 rodadas individuais
+                for _, row in sub.iterrows():
+                    f.write(f"{row['Scenario']} & {int(row['Samples'])} & {int(row['Successful'])} & "
+                            f"{int(row['Failed'])} & {row['Avg Latency (s)']:.3f} & {row['Throughput (TPS)']:.2f} \\\\\n")
+                
+                # 2. Cálculo do resumo: SOMA das transações e MÉDIA das taxas
+                total_samples = sub['Samples'].sum()
+                total_succ = sub['Successful'].sum()
+                total_fail = sub['Failed'].sum()
+                mean_lat = sub['Avg Latency (s)'].mean()
+                mean_tps = sub['Throughput (TPS)'].mean()
+
+                # 3. Insere a linha de Resumo plana (sem bold ou midrule extra conforme solicitado)
+                f.write(f"{scenario} & {int(total_samples)} & {int(total_succ)} & "
+                        f"{int(total_fail)} & {mean_lat:.3f} & {mean_tps:.3f} \\\\\n")
+                
+                # Adiciona um divisor apenas entre blocos de diferentes cenários, se houver próximo
+                f.write("\\midrule\n")
+
+            f.write("\\bottomrule\n\\end{tabular}\n\\end{table}\n")
+        
+        print(f"✅ Tabela LaTeX Caliper Gerada: {tex_path}")
     else:
-        print("⚠️  Nenhum dado Caliper extraído (Verifique se os logs tem a tabela final).")
+        print("⚠️ Nenhum dado Caliper extraído para gerar tabelas.")
 
 if __name__ == "__main__":
     main()
