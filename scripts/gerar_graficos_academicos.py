@@ -49,7 +49,7 @@ def gerar_visualizacoes(jmeter_csv, caliper_csv, output_dir):
         plt.figure(figsize=(10, 6))
         sns.boxplot(x='Scenario', y=col, hue='Tool', data=df_full, palette='Greys')
         
-        plt.title(f'Comparative Analysis: {label}')
+        plt.title(f'Analise Comparativa: {label}')
         plt.xlabel('Cenário Experimental')
         plt.ylabel(label)
         plt.legend(title='Ferramenta', frameon=True)
@@ -68,13 +68,13 @@ def gerar_visualizacoes(jmeter_csv, caliper_csv, output_dir):
                 sc_data = subset[subset['Scenario'] == scenario].sort_values('Rodada')
                 plt.plot(sc_data['Rodada'], sc_data[col], label=f'{tool} - {scenario}', alpha=0.7, marker='o', markersize=4)
 
-        plt.title(f'Performance Distribution over 32 Rounds: {label}')
+        plt.title(f'Distribuição De Desempenho em 32 Rodadas: {label}')
         plt.xlabel('Número da Rodada')
         plt.ylabel(label)
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
         
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "time_series_" + filename))
+        plt.savefig(os.path.join(output_dir, "dispersão temporal_" + filename))
         plt.close()
 
     print(f"✅ Gráficos acadêmicos gerados com sucesso em: {output_dir}")
