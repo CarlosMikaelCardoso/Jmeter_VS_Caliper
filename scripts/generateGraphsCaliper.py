@@ -100,7 +100,7 @@ def plot_combined_table(summary_list, output_path):
 
     table = ax.table(cellText=cell_text, colLabels=df.columns, loc='center', cellLoc='center')
     table.auto_set_font_size(False); table.set_fontsize(10); table.scale(1.2, 1.5)
-    plt.title("Performance Summary (Round)", fontsize=14, weight='bold')
+    plt.title("Resumo de Desempenho (Rodada)", fontsize=14, weight='bold')
     plt.savefig(os.path.join(output_path, "round_performance_summary.png"), bbox_inches='tight', dpi=150)
     plt.close()
 
@@ -122,7 +122,7 @@ def plot_resource_charts(df, scenario, output_path):
     # CPU
     plt.figure(figsize=(8, 5))
     bars = plt.bar(summary.index, summary['cpu'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
-    plt.ylabel('Avg CPU (Percentage)'); plt.title(f'CPU Usage - {scenario}')
+    plt.ylabel('CPU Média (Porcentagem)'); plt.title(f'Uso de CPU - {scenario}')
     plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
     plt.ylim(0, summary['cpu'].max() * 1.3 if summary['cpu'].max() > 0 else 10)
     plt.bar_label(bars, labels=[f"{v:.2f}%" for v in summary['cpu']], padding=3, fontsize=8)
@@ -133,7 +133,7 @@ def plot_resource_charts(df, scenario, output_path):
     # Memória
     plt.figure(figsize=(8, 5))
     bars = plt.bar(summary.index, summary['mem'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
-    plt.ylabel('Avg Mem (MiB)'); plt.title(f'Memory Usage - {scenario}')
+    plt.ylabel('Memória Média (MiB)'); plt.title(f'Uso de Memória - {scenario}')
     plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
     plt.ylim(0, summary['mem'].max() * 1.3 if summary['mem'].max() > 0 else 100)
     plt.bar_label(bars, labels=[f"{v:.1f}" for v in summary['mem']], padding=3, fontsize=8)

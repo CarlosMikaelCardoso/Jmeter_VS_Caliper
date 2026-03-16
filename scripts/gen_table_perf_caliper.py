@@ -82,10 +82,10 @@ def main():
         tex_path = os.path.join(output_dir, "round_performance_summary.tex")
         with open(tex_path, 'w') as f:
             f.write("\\begin{table}[ht]\n\\centering\n")
-            f.write("\\caption{Caliper Detailed Round Performance Summary}\n")
+            f.write("\\caption{Resumo Detalhado de Desempenho das Rodadas - Caliper}\n")
             f.write("\\label{tab:caliper_detailed_rounds}\n")
             f.write("\\begin{tabular}{lrrrrr}\n\\toprule\n")
-            f.write("Scenario & Samples & Success & Fail & Avg Latency (s) & TPS \\\\\n\\midrule\n")
+            f.write("Cenário & Amostras & Sucesso & Falha & Latência Média (s) & TPS \\\\\n\\midrule\n")
 
             for scenario in df['Scenario'].unique():
                 sub = df[df['Scenario'] == scenario]

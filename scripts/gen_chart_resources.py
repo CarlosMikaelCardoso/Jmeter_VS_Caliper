@@ -117,8 +117,8 @@ def generate_resource_charts(input_dir, output_dir):
         plt.figure(figsize=(9, 5))
         bars = plt.bar(summary.index, summary['cpu'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
         
-        plt.ylabel('Avg CPU Usage (Percentage)')
-        plt.title(f'Resource Usage (CPU) - {scenario}')
+        plt.ylabel('Uso Médio de CPU (Porcentagem)')
+        plt.title(f'Uso de Recursos (CPU) - {scenario}')
         plt.xticks(rotation=45, ha='right', fontsize=9)
         plt.grid(axis='y', linestyle='--', alpha=0.3)
         
@@ -137,8 +137,8 @@ def generate_resource_charts(input_dir, output_dir):
         plt.figure(figsize=(9, 5))
         bars = plt.bar(summary.index, summary['mem'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
         
-        plt.ylabel('Avg Memory (MiB)')
-        plt.title(f'Resource Usage (Mem) - {scenario}')
+        plt.ylabel('Memória Média (MiB)')
+        plt.title(f'Uso de Recursos (Memória) - {scenario}')
         plt.xticks(rotation=45, ha='right', fontsize=9)
         plt.grid(axis='y', linestyle='--', alpha=0.3)
         

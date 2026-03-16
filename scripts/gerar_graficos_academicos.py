@@ -40,8 +40,8 @@ def gerar_visualizacoes(jmeter_csv, caliper_csv, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     metrics = [
-        ('Throughput (TPS)', 'Throughput (TPS)', 'boxplot_tps.pdf'),
-        ('Avg Latency (s)', 'Average Latency (s)', 'boxplot_latency.pdf')
+        ('Throughput (TPS)', 'Vazão (TPS)', 'boxplot_tps.pdf'),
+        ('Avg Latency (s)', 'Latência Média (s)', 'boxplot_latencia.pdf')
     ]
 
     # 1. GERAÇÃO DE BOXPLOTS (Comparação de Dispersão)
@@ -49,7 +49,7 @@ def gerar_visualizacoes(jmeter_csv, caliper_csv, output_dir):
         plt.figure(figsize=(10, 6))
         sns.boxplot(x='Scenario', y=col, hue='Tool', data=df_full, palette='Greys')
         
-        plt.title(f'Analise Comparativa: {label}')
+        plt.title(f'Análise Comparativa: {label}')
         plt.xlabel('Cenário Experimental')
         plt.ylabel(label)
         plt.legend(title='Ferramenta', frameon=True)
@@ -68,7 +68,7 @@ def gerar_visualizacoes(jmeter_csv, caliper_csv, output_dir):
                 sc_data = subset[subset['Scenario'] == scenario].sort_values('Rodada')
                 plt.plot(sc_data['Rodada'], sc_data[col], label=f'{tool} - {scenario}', alpha=0.7, marker='o', markersize=4)
 
-        plt.title(f'Distribuição De Desempenho em 32 Rodadas: {label}')
+        plt.title(f'Distribuição de Desempenho em 32 Rodadas: {label}')
         plt.xlabel('Número da Rodada')
         plt.ylabel(label)
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)

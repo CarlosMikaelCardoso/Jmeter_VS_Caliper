@@ -40,9 +40,9 @@ def generate_article_assets(results_dir):
                     subset = df[df['container'] == container]
                     plt.plot(subset['time'], subset['cpu'], label=container, linewidth=0.8)
             
-            plt.xlabel('Time (s)')
-            plt.ylabel('CPU Usage (%)')
-            plt.title('Resource Consumption')
+            plt.xlabel('Tempo (s)')
+            plt.ylabel('Uso de CPU (%)')
+            plt.title('Consumo de Recursos')
             plt.legend(fontsize=6, loc='upper right')
             plt.grid(True, linestyle='--', alpha=0.5)
             

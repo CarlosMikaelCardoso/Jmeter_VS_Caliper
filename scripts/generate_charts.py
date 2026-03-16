@@ -21,7 +21,7 @@ def plot_performance(df, output_dir, tool_name):
         subset = df[df['Scenario'] == scen]
         plt.plot(subset['Rodada'], subset['Throughput (TPS)'], marker='o', label=scen)
     
-    plt.title(f'Throughput por Rodada - {tool_name}')
+    plt.title(f'Vazão por Rodada - {tool_name}')
     plt.xlabel('Rodada')
     plt.ylabel('Transações por Segundo (TPS)')
     plt.legend()
@@ -43,7 +43,7 @@ def plot_performance(df, output_dir, tool_name):
     plt.savefig(os.path.join(output_dir, f'chart_latency_{tool_name.lower()}.png'))
     plt.close()
     
-    print(f"✅ Gráficos de Performance gerados em {output_dir}")
+    print(f"✅ Gráficos de Desempenho gerados em {output_dir}")
 
 def plot_cpu(cpu_files, output_dir):
     """Lê os logs de CPU e gera gráfico de Média de Uso por Rodada"""
@@ -96,7 +96,7 @@ def plot_cpu(cpu_files, output_dir):
     plt.plot(df['Rodada'], df['CPU_User_Avg'], color='purple', marker='^')
     plt.title('Consumo Médio de CPU (%user) por Rodada')
     plt.xlabel('Rodada')
-    plt.ylabel('% CPU User')
+    plt.ylabel('% CPU Usuário')
     plt.ylim(0, 100) # CPU vai de 0 a 100
     plt.grid(True)
     plt.savefig(os.path.join(output_dir, 'chart_host_cpu.png'))
@@ -124,9 +124,9 @@ def main():
             df = pd.read_csv(perf_csv)
             plot_performance(df, output_dir, tool_name)
         except Exception as e:
-            print(f"Erro ao plotar performance: {e}")
+            print(f"Erro ao plotar desempenho: {e}")
     else:
-        print(f"⚠️  CSV de performance não encontrado: {perf_csv}")
+        print(f"⚠️  CSV de desempenho não encontrado: {perf_csv}")
 
     # 2. Lê logs de CPU para gerar gráfico
     cpu_files = glob.glob(os.path.join(input_dir, "host_cpu_round_*.log"))
