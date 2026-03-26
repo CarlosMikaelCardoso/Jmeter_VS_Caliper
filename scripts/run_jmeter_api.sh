@@ -35,6 +35,7 @@ echo "Logs serão salvos em: $LOG_OUTPUT"
 # O '2>&1' redireciona erros também para o log
 # O '&' roda em background para não travar o terminal
 cd ../middleware
+npm install > /dev/null 2>&1 # Instala dependências silenciosamente
 nohup node api.js > "$LOG_OUTPUT" 2>&1 &
 
 API_PID=$!

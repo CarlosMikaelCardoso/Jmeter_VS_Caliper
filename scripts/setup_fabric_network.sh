@@ -21,9 +21,6 @@ function install_dependencies(){
     sudo apt-get install -y git curl python3-pip jq golang-go ca-certificates gnupg lsb-release
 
     sudo snap install docker 
-    
-    # ---------------------------------------------------------
-    # * OTIMIZAÇÃO: Inicialização robusta do Docker (Wait-for-it pattern)
     echo "Iniciando Docker (Snap)..."
     sudo snap start docker || true
     
