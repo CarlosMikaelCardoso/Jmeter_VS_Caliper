@@ -1,18 +1,40 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Configurações Gerais
-TOTAL_ROUNDS=32
-WORKERS=25 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/config.sh"
+
+TOTAL_ROUNDS="${TOTAL_ROUNDS}"
+WORKERS="${JMETER_WORKERS}"
 
 # Caminhos
-RESULTS_DIR="${PROJECT_ROOT}/results/jmeter_runs"
+RESULTS_DIR="${RESULTS_DIR}/jmeter_runs"
 HOST_MONITOR_DIR="${RESULTS_DIR}/host_monitor"
 SETUP_NETWORK_SCRIPT="${SCRIPT_DIR}/setup_fabric_network.sh"
 GENERATE_GRAPHS_SCRIPT="${SCRIPT_DIR}/generateGraphs.py"
 
 mkdir -p "${HOST_MONITOR_DIR}"
+
+MONITOR_PID=""
+if ! curl -fsS "http://${MONITOR_HOST}:${MONITOR_PORT}/health" >/dev/null 2>&1; then
+    echo "[INFO] Iniciando monitor Docker em segundo plano"
+    (cd "${MIDDLEWARE_DIR}" && nohup node monitor-api.js > "${RESULTS_DIR}/monitor.log" 2>&1 & echo $! > "${RESULTS_DIR}/monitor.pid")
+    for _ in {1..20}; do
+        [[ -f "${RESULTS_DIR}/monitor.pid" ]] && break
+        sleep 1
+    done
+    MONITOR_PID="$(cat "${RESULTS_DIR}/monitor.pid")"
+fi
+cleanup_monitor() {
+    if [[ -n "${MONITOR_PID}" ]] && kill -0 "${MONITOR_PID}" 2>/dev/null; then
+        kill "${MONITOR_PID}" 2>/dev/null || true
+    fi
+}
+trap cleanup_monitor EXIT
 
 echo "[RUN] INICIANDO BATERIA DE $TOTAL_ROUNDS RODADAS (JMeter)"
 echo "[INFO] Workers definidos: $WORKERS"
@@ -49,7 +71,7 @@ do
     ROUND_FOLDER="${RESULTS_DIR}/round_${i}"
     mkdir -p "$ROUND_FOLDER"
     # Passamos $i como argumento para que o executor saiba qual é a rodada atual
-    ./run_jmeter_api.sh "$ROUND_FOLDER/api.log" $WORKERS $i 
+    bash "${SCRIPT_DIR}/run_jmeter_api.sh" "$ROUND_FOLDER/api.log" "${WORKERS}" "${i}"
 
     # 3. PARAR MONITORAMENTO
     kill $MONITOR_PID

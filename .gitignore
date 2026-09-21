@@ -47,6 +47,7 @@ apache-jmeter-*/
 *.jtl
 *.csv
 *.txt
+!requirements.txt
 jmeter_runs/
 jmeter_consolidated_resource_summary.log
 temp_eth_gen/

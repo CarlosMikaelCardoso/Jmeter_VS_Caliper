@@ -2,29 +2,29 @@
 
 # --- DEFINIÇÃO DE CAMINHOS RELATIVOS ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/config.sh"
 
 # Caminhos Base
-BENCHMARK_DIR="${PROJECT_ROOT}/benchmarks/jmeter_fabric"
-BASE_RESULTS_DIR="${PROJECT_ROOT}/results/jmeter_runs" # Diretório raiz dos resultados
+BENCHMARK_DIR="${JMETER_DIR}"
+BASE_RESULTS_DIR="${RESULTS_DIR}/jmeter_runs" # Diretório raiz dos resultados
 GENERATE_GRAPHS_SCRIPT="${SCRIPT_DIR}/generateGraphs.py"
 
 # Configuração JMeter
-JMETER_VERSION="5.6.3"
 JMETER_DIR="${PROJECT_ROOT}/apache-jmeter-${JMETER_VERSION}" 
 JMETER_BIN="${JMETER_DIR}/bin/jmeter"
 JMETER_URL="https://dlcdn.apache.org/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz"
 
 # Java Config
-JAVA_DIR_NAME="jdk-21.0.7"
-JAVA_TAR_GZ="jdk-21.0.7_linux-x64_bin.tar.gz"
+JAVA_DIR_NAME="jdk-${JAVA_VERSION}"
+JAVA_TAR_GZ="jdk-${JAVA_VERSION}_linux-x64_bin.tar.gz"
 JAVA_URL="https://download.oracle.com/java/21/archive/${JAVA_TAR_GZ}"
 export JAVA_HOME="${PROJECT_ROOT}/${JAVA_DIR_NAME}"
 
 # API Config
-API_HOST=$(hostname -I | awk '{print $1}')
-API_PORT="3000"
-MONITOR_PORT="3002"
+API_HOST="${API_HOST}"
+API_PORT="${API_PORT}"
+MONITOR_PORT="${MONITOR_PORT}"
 # Recebe o caminho do log como 1º argumento. Se não passar, usa 'api.log' no local atual.
 LOG_OUTPUT="${1:-api.log}"
 
@@ -34,16 +34,18 @@ echo "Logs serão salvos em: $LOG_OUTPUT"
 # Navega até o diretório do middleware e inicia o node
 # O '2>&1' redireciona erros também para o log
 # O '&' roda em background para não travar o terminal
-cd ../middleware
-npm install > /dev/null 2>&1 # Instala dependências silenciosamente
+cd "${MIDDLEWARE_DIR}"
 nohup node api.js > "$LOG_OUTPUT" 2>&1 &
 
 API_PID=$!
 echo "API iniciada com PID: $API_PID"
 
 # Salva o PID para poder matar o processo depois (no script de 32 rodadas)
-echo $API_PID > ../api_pid.txt
-sleep 5
+echo "$API_PID" > "${PROJECT_ROOT}/api_pid.txt"
+for _ in {1..20}; do
+    curl -fsS "http://${API_HOST}:${API_PORT}/health" >/dev/null 2>&1 && break
+    sleep 1
+done
 
 # Parâmetros
 NUM_USERS=${2:-5}

@@ -7,11 +7,13 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-NETWORK_DIR="${PROJECT_ROOT}/network/test-network"
-BENCHMARK_DIR="${PROJECT_ROOT}/benchmarks/caliper_fabric"
-RESULTS_DIR="${PROJECT_ROOT}/results/caliper_runs"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/config.sh"
+
+BENCHMARK_DIR="${CALIPER_DIR}"
+RESULTS_DIR="${RESULTS_DIR}/caliper_runs"
 GENERATE_GRAPHS_SCRIPT="${SCRIPT_DIR}/generateGraphsCaliper.py"
-MONITOR_API_URL="http://localhost:3002"
+MONITOR_API_URL="http://${MONITOR_HOST}:${MONITOR_PORT}"
 
 mkdir -p "${RESULTS_DIR}"
 
@@ -29,18 +31,14 @@ caliper_setup() {
     cd "${PROJECT_ROOT}"
     
     # 1. Verifica se a CLI do Caliper já existe
-    if ! npx --no-install caliper --version > /dev/null 2>&1; then
-        echo "[INFO] Instalando @hyperledger/caliper-cli..."
-        npm install --save-dev @hyperledger/caliper-cli
-    else
-        echo "[INFO] Caliper CLI já instalado."
-    fi
+    npx --no-install caliper --version > /dev/null 2>&1 || \
+        die "Caliper não está instalado. Execute 'npm run setup'."
 
     # 2. Verifica se o SDK do Fabric já está vinculado (Bind)
     # Verifica se a pasta do módulo existe para evitar 'npm install' desnecessário
     if [ ! -d "node_modules/@hyperledger/fabric-gateway" ]; then
         echo "[INFO] Realizando Bind do Caliper para Fabric 2.5..."
-        npx caliper bind --caliper-bind-sut fabric:2.5
+        npx --no-install caliper bind --caliper-bind-sut "fabric:${FABRIC_VERSION%.*}"
     else
         echo "[INFO] Bind do Fabric detectado (node_modules). Pulando instalação."
     fi
@@ -112,7 +110,7 @@ run_caliper_test() {
     cd "${PROJECT_ROOT}"
     
     echo "[RUN] Executando Caliper... Logs em: ${LOG_FILE}"
-    npx caliper launch manager \
+    npx --no-install caliper launch manager \
         --caliper-workspace "${PROJECT_ROOT}" \
         --caliper-networkconfig "${BENCHMARK_DIR}/network-config.yaml" \
         --caliper-benchconfig "${TEMP_CONFIG_FILE}" \

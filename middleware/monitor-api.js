@@ -9,6 +9,10 @@ const app = express();
 const port = 3002; // Porta dedicada para o monitor
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
 // --- CORREÇÃO PARA DOCKER DESKTOP ---
 console.log("Tentando conectar ao socket padrão do Docker Engine (/var/run/docker.sock)...");
 

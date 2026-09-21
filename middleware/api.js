@@ -2,10 +2,9 @@
 'use strict';
 
 const express = require('express');
-const bodyParser = require('body-parser');
 const { connectToNetwork } = require('./workloads/fabric-connector');
 const logger = require('./logger');
-const { v4: uuidv4 } = require('uuid'); // Certifique-se de ter um gerador de ID
+const { randomUUID } = require('crypto');
 
 // Importa os workloads
 const workloads = {
@@ -15,10 +14,14 @@ const workloads = {
 };
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 const PORT = 3000;
 
 let contract = null;
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', fabricConnected: contract !== null });
+});
 
 // Inicialização
 (async () => {
@@ -27,7 +30,7 @@ let contract = null;
 
 // Endpoint Genérico de Invoke (Open e Transfer)
 app.post('/api/invoke', async (req, res) => {
-    const reqId = uuidv4().split('-')[0]; // ID curto para rastreio
+    const reqId = randomUUID().split('-')[0]; // ID curto para rastreio
     
     // [T1] Timestamp de chegada (Nível Aplicação)
     console.log(`[${new Date().toISOString()}] ReqID:${reqId} Recebido do JMeter`);

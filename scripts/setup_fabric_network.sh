@@ -8,6 +8,8 @@ set -o pipefail  # Aborta se algum comando em um pipeline falhar
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Define a raiz do projeto (um nível acima de scripts/)
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/config.sh"
 
 # Caminhos atualizados conforme sua imagem
 NETWORK_DIR="${PROJECT_ROOT}/network"
@@ -73,17 +75,17 @@ function network_creation(){
     cd "$NETWORK_DIR" || exit
     # Se o install-fabric.sh estiver dentro de network/
     if [ -f "./install-fabric.sh" ]; then
-        ./install-fabric.sh docker binary --fabric-version '2.5.9'
+        ./install-fabric.sh docker binary --fabric-version "${FABRIC_VERSION}"
     fi
     
     cd ./test-network || exit
     
     echo "Levantando a rede do Hyperledger Fabric..."
-    ./network.sh up createChannel -c gercom -s couchdb -o "$qtd_orderers"
+    ./network.sh up createChannel -c "${FABRIC_CHANNEL}" -s couchdb -o "$qtd_orderers"
     
     echo "Subindo chaincode..."
     # O caminho do chaincode agora vem da variável corrigida CHAINCODE_DIR
-    ./network.sh deployCC -ccn simple -ccp "$CHAINCODE_DIR" -ccl go -c gercom
+    ./network.sh deployCC -ccn "${FABRIC_CHAINCODE}" -ccp "$CHAINCODE_DIR" -ccl go -c "${FABRIC_CHANNEL}"
 }
 
 function configure_middleware(){
@@ -111,7 +113,7 @@ function configure_middleware(){
     if [ -f "${PROJECT_ROOT}/middleware/scripts/enrollAdmin.js" ]; then
         pushd "${PROJECT_ROOT}/middleware" > /dev/null
         # Instala dependências da API caso não estejam instaladas
-        if [ ! -d "node_modules" ]; then npm install; fi
+        npm ci
         node scripts/enrollAdmin.js
         popd > /dev/null
     else
@@ -136,10 +138,9 @@ function cleanup(){
 }
 
 main() {
-    local orderers=${1:-5}
+    local orderers=${1:-${ORDERERS}}
 
-    install_dependencies
-    cleanup
+    bash "${SCRIPT_DIR}/bootstrap.sh"
     network_down
     network_creation "$orderers"
     

@@ -1,4 +1,17 @@
 {
+  "name": "jmeter-vs-caliper",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "install:all": "npm ci && npm --prefix middleware ci",
+    "setup": "bash scripts/bootstrap.sh",
+    "network:up": "bash scripts/setup_fabric_network.sh",
+    "benchmark:jmeter": "bash scripts/run_32_rounds_jmeter.sh",
+    "benchmark:caliper": "bash scripts/run_32_rounds_caliper.sh",
+    "report": "bash scripts/generateFinalReport.sh"
+  },
   "devDependencies": {
     "@hyperledger/caliper-cli": "^0.6.0"
   },
