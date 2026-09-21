@@ -1,5 +1,5 @@
 networkFiles/*
-*.tar.gz 
+*.tar.gz
 besu-*/
 jdk-*/
 *.jfr
@@ -37,6 +37,8 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+networkconfig.json
+testes/networkconfig.json
 
 # Ficheiros gerados pela build
 dist

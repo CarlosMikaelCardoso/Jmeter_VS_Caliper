@@ -1,0 +1,23 @@
+{
+  "caliper": {
+    "blockchain": "ethereum"
+  },
+  "ethereum": {
+    "url": "ws://127.0.0.1:8645",
+    "contractDeployerAddress": "REPLACE_WITH_DEPLOYER_ADDRESS",
+    "contractDeployerAddressPrivateKey": "REPLACE_WITH_PRIVATE_KEY",
+    "fromAddressSeed": "REPLACE_WITH_WORKLOAD_SEED",
+    "transactionConfirmationBlocks": 2,
+    "contracts": {
+      "simple": {
+        "path": "./src/ethereum/simple/simple.json",
+        "estimateGas": true,
+        "gas": {
+          "transfer": 70000,
+          "query": 100000,
+          "open": 100000
+        }
+      }
+    }
+  }
+}

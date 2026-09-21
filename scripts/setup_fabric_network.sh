@@ -10,82 +10,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/config.sh"
+export CONTAINER_CLI_COMPOSE="${CONTAINER_CLI_COMPOSE:-docker compose}"
 
-# Caminhos atualizados conforme sua imagem
 NETWORK_DIR="${PROJECT_ROOT}/network"
 CHAINCODE_DIR="${PROJECT_ROOT}/contracts/simple/go"
 API_CONFIG_DIR="${PROJECT_ROOT}/middleware"
 API_WALLET_DIR="${PROJECT_ROOT}/middleware/wallet"
 
-function install_dependencies(){
-    # Instalação de dependências básicas
-    sudo apt-get update
-    sudo apt-get install -y git curl python3-pip jq golang-go ca-certificates gnupg lsb-release
-
-    sudo snap install docker 
-    echo "Iniciando Docker (Snap)..."
-    sudo snap start docker || true
-    
-    echo "Aguardando Docker daemon estar pronto..."
-    local timeout=30
-    local counter=0
-    while ! docker info >/dev/null 2>&1; do
-        if [ $counter -ge $timeout ]; then
-            echo "ERRO CRÍTICO: Timeout aguardando Docker iniciar."
-            exit 1
-        fi
-        echo "Aguardando Docker... ($counter/$timeout s)"
-        sleep 1
-        ((counter++))
-    done
-    echo "Docker está rodando!"
-
-    # Adiciona o usuário ao grupo docker se necessário (Segurança)
-    if ! groups "$USER" | grep -q '\bdocker\b'; then
-        echo "Adicionando usuário $USER ao grupo docker..."
-        sudo useradd docker || true
-        sudo usermod -aG docker "$USER"
-        echo "AVISO: Talvez seja necessário fazer logoff/login para aplicar as permissões de grupo."
-    fi
-
-    # Mostra versões
-    docker --version || true
-    docker compose version || true
-    
-    # Instala Node.js 20
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs build-essential
-    # Instala pacotes Python
-    sudo apt-get install -y python3-pip
-    pip3 install pandas matplotlib seaborn tabulate beautifulsoup4 numpy
-}
-
 function network_down(){
-    if [ -d "$NETWORK_DIR/test-network" ]; then
-        cd "$NETWORK_DIR/test-network" || exit
-        ./network.sh down
-    else
-        echo "Aviso: Pasta test-network não encontrada em $NETWORK_DIR"
-    fi
+    [[ -f "${NETWORK_DIR}/test-network/network.sh" ]] || die "Fabric test-network não encontrada em ${NETWORK_DIR}"
+    (cd "${NETWORK_DIR}/test-network" && bash network.sh down)
 }
 
 function network_creation(){
     local qtd_orderers=$1  # Recebe a quantidade de orderers passada pela main
     
-    cd "$NETWORK_DIR" || exit
-    # Se o install-fabric.sh estiver dentro de network/
-    if [ -f "./install-fabric.sh" ]; then
-        ./install-fabric.sh docker binary --fabric-version "${FABRIC_VERSION}"
-    fi
-    
-    cd ./test-network || exit
+    [[ -f "${NETWORK_DIR}/install-fabric.sh" ]] || die "network/install-fabric.sh não encontrado"
+    bash "${NETWORK_DIR}/install-fabric.sh" docker binary --fabric-version "${FABRIC_VERSION}"
+    cd "${NETWORK_DIR}/test-network"
     
     echo "Levantando a rede do Hyperledger Fabric..."
-    ./network.sh up createChannel -c "${FABRIC_CHANNEL}" -s couchdb -o "$qtd_orderers"
+    bash network.sh up createChannel -c "${FABRIC_CHANNEL}" -s couchdb -o "$qtd_orderers"
     
     echo "Subindo chaincode..."
     # O caminho do chaincode agora vem da variável corrigida CHAINCODE_DIR
-    ./network.sh deployCC -ccn "${FABRIC_CHAINCODE}" -ccp "$CHAINCODE_DIR" -ccl go -c "${FABRIC_CHANNEL}"
+    bash network.sh deployCC -ccn "${FABRIC_CHAINCODE}" -ccp "$CHAINCODE_DIR" -ccl go -c "${FABRIC_CHANNEL}"
 }
 
 function configure_middleware(){
@@ -122,26 +71,19 @@ function configure_middleware(){
 
 }
 
-function cleanup(){
-    echo "Limpando arquivos e contêineres de uma execução anterior..."
-    if [ -d "fabric-samples" ]; then
-        if [ -d "fabric-samples/test-network" ]; then
-            (cd fabric-samples/test-network && ./network.sh down) || echo "Falha ao derrubar a rede ou já estava parada."
-        else
-            echo "Diretório 'fabric-samples/test-network' não encontrado, pulando 'network.sh down'."
-        fi
-        sudo rm -rf fabric-samples install-fabric.sh
-        echo "Limpeza concluída."
-    else
-        echo "Pasta 'fabric-samples' não encontrada. Nada para limpar."
-    fi
-}
-
 main() {
+    if [[ "${1:-}" == "--down" ]]; then
+        network_down
+        return
+    fi
+
     local orderers=${1:-${ORDERERS}}
 
     bash "${SCRIPT_DIR}/bootstrap.sh"
-    network_down
+    require_command go
+    if [[ -f "${NETWORK_DIR}/test-network/network.sh" ]]; then
+        network_down || true
+    fi
     network_creation "$orderers"
     
     # Chama a configuração da API após a rede subir

@@ -10,7 +10,7 @@ source "${SCRIPT_DIR}/lib/config.sh"
 install_system_dependencies() {
     local missing=()
     local command
-    for command in curl git jq python3 wget; do
+    for command in curl git go jq python3 wget; do
         command -v "${command}" >/dev/null 2>&1 || missing+=("${command}")
     done
 
@@ -31,12 +31,17 @@ install_system_dependencies() {
     command -v sudo >/dev/null 2>&1 || die "sudo é necessário para instalar dependências do sistema"
     echo "[INFO] Instalando dependências do sistema: ${missing[*]}"
     sudo apt-get update
-    sudo apt-get install -y ca-certificates curl git jq python3-venv wget sysstat nodejs npm docker.io "${missing[@]}"
+    local packages=(ca-certificates curl git jq python3-venv wget sysstat nodejs npm docker.io)
+    if ! command -v go >/dev/null 2>&1; then
+        packages+=(golang-go)
+    fi
+    sudo apt-get install -y "${packages[@]}"
 }
 
 configure_docker() {
     docker info >/dev/null 2>&1 || sudo systemctl start docker
     docker info >/dev/null 2>&1 || die "Docker não está acessível. Verifique o daemon e as permissões do usuário."
+    docker compose version >/dev/null 2>&1 || die "Docker Compose não está disponível. Instale o plugin 'docker compose'."
     if ! groups "${USER}" | grep -qw docker; then
         echo "[WARN] Usuário fora do grupo docker; use 'newgrp docker' ou faça login novamente."
     fi
@@ -49,6 +54,7 @@ install_node_dependencies() {
     echo "[INFO] Instalando dependências Node com lockfiles"
     (cd "${PROJECT_ROOT}" && npm ci)
     (cd "${MIDDLEWARE_DIR}" && npm ci)
+    (cd "${PROJECT_ROOT}/api-besu" && npm ci)
 }
 
 install_python_dependencies() {

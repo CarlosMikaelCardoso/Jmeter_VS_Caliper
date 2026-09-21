@@ -5,9 +5,14 @@
     "node": ">=20"
   },
   "scripts": {
-    "install:all": "npm ci && npm --prefix middleware ci",
+    "install:all": "npm ci && npm --prefix middleware ci && npm --prefix api-besu ci",
     "setup": "bash scripts/bootstrap.sh",
-    "network:up": "bash scripts/setup_fabric_network.sh",
+    "network:up": "bash scripts/backend.sh network-up",
+    "network:down": "bash scripts/backend.sh network-down",
+    "network:check": "bash scripts/backend.sh network-check",
+    "api:start": "bash scripts/backend.sh api",
+    "network:up:fabric": "bash scripts/setup_fabric_network.sh",
+    "network:up:besu": "bash scripts/setup_besu_network.sh",
     "benchmark:jmeter": "bash scripts/run_32_rounds_jmeter.sh",
     "benchmark:caliper": "bash scripts/run_32_rounds_caliper.sh",
     "report": "bash scripts/generateFinalReport.sh"
