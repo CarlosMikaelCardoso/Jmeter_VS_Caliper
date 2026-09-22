@@ -11,6 +11,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/config.sh"
 export CONTAINER_CLI_COMPOSE="${CONTAINER_CLI_COMPOSE:-docker compose}"
+export DOCKER_HOST="unix:///var/run/docker.sock"
 
 NETWORK_DIR="${PROJECT_ROOT}/network"
 CHAINCODE_DIR="${PROJECT_ROOT}/contracts/simple/go"
@@ -27,8 +28,12 @@ function network_creation(){
     local qtd_orderers=$1  # Recebe a quantidade de orderers passada pela main
     
     [[ -f "${NETWORK_DIR}/install-fabric.sh" ]] || die "network/install-fabric.sh não encontrado"
-    bash "${NETWORK_DIR}/install-fabric.sh" docker binary --fabric-version "${FABRIC_VERSION}"
+    cd "${NETWORK_DIR}"
+    bash ./install-fabric.sh docker binary --fabric-version "${FABRIC_VERSION}"
     cd "${NETWORK_DIR}/test-network"
+
+    docker info >/dev/null || die "Docker daemon ficou indisponível antes de iniciar a rede"
+    docker run --rm hello-world >/dev/null || die "Docker não conseguiu iniciar um container de teste"
     
     echo "Levantando a rede do Hyperledger Fabric..."
     bash network.sh up createChannel -c "${FABRIC_CHANNEL}" -s couchdb -o "$qtd_orderers"
