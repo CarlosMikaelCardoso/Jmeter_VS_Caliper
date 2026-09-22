@@ -42,11 +42,21 @@ install_node() {
         node_major="$(node -p 'process.versions.node.split(".")[0]')"
     fi
 
-    if ((node_major < MIN_NODE_MAJOR)); then
-        echo "[INFO] Instalando Node.js ${MIN_NODE_MAJOR}.x e npm"
-        curl -fsSL https://deb.nodesource.com/setup_${MIN_NODE_MAJOR}.x | sudo -E bash -
-        sudo apt-get install -y nodejs
+    if ((node_major >= MIN_NODE_MAJOR)) && command -v npm >/dev/null 2>&1; then
+        return
     fi
+
+    echo "[INFO] Removendo pacotes Node antigos antes de instalar Node.js ${MIN_NODE_MAJOR}.x"
+    # Ubuntu ships nodejs/libnode-dev separately; libnode-dev owns headers
+    # that conflict with the NodeSource package.
+    sudo dpkg --configure -a || true
+    sudo apt-get remove -y libnode-dev nodejs npm || true
+    sudo apt-get autoremove -y || true
+    sudo apt-get -f install -y
+
+    echo "[INFO] Instalando Node.js ${MIN_NODE_MAJOR}.x e npm"
+    curl -fsSL "https://deb.nodesource.com/setup_${MIN_NODE_MAJOR}.x" | sudo -E bash -
+    sudo apt-get install -y nodejs
 }
 
 install_docker() {
