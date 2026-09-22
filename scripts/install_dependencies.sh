@@ -85,9 +85,16 @@ configure_docker() {
             echo "(daemon.json ausente)" >&2
         return 1
     fi
+    if ! docker info >/dev/null 2>&1; then
+        echo "[WARN] Docker foi instalado, mas este usuário ainda não tem acesso ao socket." >&2
+        echo "[AÇÃO] Execute manualmente: sudo usermod -aG docker ${USER}" >&2
+        echo "[AÇÃO] Depois execute: newgrp docker (ou faça logout/login)" >&2
+        return 0
+    fi
+
     if ! groups "${USER}" | grep -qw docker; then
-        sudo usermod -aG docker "${USER}"
-        echo "[WARN] Usuário adicionado ao grupo docker. Faça login novamente ou execute 'newgrp docker'."
+        echo "[WARN] Docker está acessível nesta sessão, mas o grupo docker ainda não está associado ao usuário." >&2
+        echo "[AÇÃO] Se necessário, execute manualmente: sudo usermod -aG docker ${USER}" >&2
     fi
 }
 

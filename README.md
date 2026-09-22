@@ -18,6 +18,17 @@ bash scripts/install_dependencies.sh
 npm run setup
 ```
 
+O instalador não altera automaticamente os grupos do usuário. Se o Docker
+retornar `permission denied`, execute manualmente:
+
+```bash
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker info
+```
+
+Depois que `docker info` funcionar sem `sudo`, execute `npm run setup`.
+
 O instalador configura Docker Engine, Docker Compose v2, Node.js 20+, npm, Go,
 Python, `jq`, `git`, `wget`, `curl`, `sar` e `netcat`. Esse deve ser o primeiro
 comando executado em uma máquina nova. Depois, `npm run setup`
@@ -87,6 +98,6 @@ O Besu usa a API na porta `3001` e o RPC padrão em `8545`; a API Fabric usa a
 porta `3000`. O endpoint `/health` verifica a disponibilidade do backend.
 
 O código da API e os artefatos da topologia Besu estão em `api-besu/`,
-`docker-compose.yaml`, `genesis_QBFT.json` e nos scripts de geração. O setup
-gera as chaves localmente; as credenciais da conta de deploy e o endereço do
-contrato continuam obrigatoriamente fora do Git, em `.env` ou no ambiente.
+`docker-compose.yaml`, `genesis_QBFT.json` e nos scripts de geração. O
+`.env.example` contém somente as credenciais padrão da rede local de laboratório;
+substitua-as em qualquer ambiente real e mantenha o `.env` fora do Git.

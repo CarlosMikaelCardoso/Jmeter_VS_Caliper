@@ -31,7 +31,7 @@ main() {
     require_command go
     require_command docker
     docker compose version >/dev/null 2>&1 || die "Docker Compose v2 não encontrado. Execute primeiro: bash scripts/install_dependencies.sh"
-    docker info >/dev/null 2>&1 || die "Docker não está acessível. Execute 'newgrp docker' ou faça login novamente."
+    require_docker_access
     install_node_dependencies
     install_python_dependencies
     echo "[OK] Ambiente pronto. Copie .env.example para .env para personalizar a execução."

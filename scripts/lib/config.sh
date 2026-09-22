@@ -54,3 +54,9 @@ die() {
 require_command() {
     command -v "$1" >/dev/null 2>&1 || die "Comando obrigatório não encontrado: $1. Execute primeiro: bash scripts/install_dependencies.sh"
 }
+
+require_docker_access() {
+    require_command docker
+    docker info >/dev/null 2>&1 || die "Docker não está acessível. Execute manualmente: sudo usermod -aG docker ${USER} && newgrp docker"
+    docker compose version >/dev/null 2>&1 || die "Docker Compose v2 não está disponível. Execute bash scripts/install_dependencies.sh"
+}

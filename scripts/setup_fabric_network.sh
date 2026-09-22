@@ -18,6 +18,7 @@ API_CONFIG_DIR="${PROJECT_ROOT}/middleware"
 API_WALLET_DIR="${PROJECT_ROOT}/middleware/wallet"
 
 function network_down(){
+    require_docker_access
     [[ -f "${NETWORK_DIR}/test-network/network.sh" ]] || die "Fabric test-network não encontrada em ${NETWORK_DIR}"
     (cd "${NETWORK_DIR}/test-network" && bash network.sh down)
 }
@@ -80,6 +81,7 @@ main() {
     local orderers=${1:-${ORDERERS}}
 
     bash "${SCRIPT_DIR}/bootstrap.sh"
+    require_docker_access
     require_command go
     if [[ -f "${NETWORK_DIR}/test-network/network.sh" ]]; then
         network_down || true
