@@ -75,7 +75,16 @@ install_docker() {
 }
 
 configure_docker() {
-    sudo systemctl enable --now docker
+    if ! sudo systemctl enable --now docker; then
+        echo "[ERRO] Docker não iniciou. Últimos eventos do docker.service:" >&2
+        sudo journalctl -u docker.service -n 80 --no-pager >&2 || true
+        echo "[ERRO] Últimos eventos do containerd.service:" >&2
+        sudo journalctl -u containerd.service -n 40 --no-pager >&2 || true
+        echo "[ERRO] Configuração atual do Docker:" >&2
+        sudo test -f /etc/docker/daemon.json && sudo sed -n '1,160p' /etc/docker/daemon.json >&2 || \
+            echo "(daemon.json ausente)" >&2
+        return 1
+    fi
     if ! groups "${USER}" | grep -qw docker; then
         sudo usermod -aG docker "${USER}"
         echo "[WARN] Usuário adicionado ao grupo docker. Faça login novamente ou execute 'newgrp docker'."

@@ -3,8 +3,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${CONFIG_DIR}/../.." && pwd)"
 ENV_FILE="${PROJECT_ROOT}/.env"
 
 if [[ -f "${ENV_FILE}" ]]; then
@@ -52,5 +52,5 @@ die() {
 }
 
 require_command() {
-    command -v "$1" >/dev/null 2>&1 || die "Comando obrigatório não encontrado: $1. Execute: npm run setup"
+    command -v "$1" >/dev/null 2>&1 || die "Comando obrigatório não encontrado: $1. Execute primeiro: bash scripts/install_dependencies.sh"
 }

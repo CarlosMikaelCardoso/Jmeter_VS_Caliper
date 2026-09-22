@@ -14,12 +14,13 @@ Besu usando JMeter e Hyperledger Caliper. O fluxo comum é selecionado por
 
 ```bash
 cp .env.example .env
-npm run install:system
+bash scripts/install_dependencies.sh
 npm run setup
 ```
 
 O instalador configura Docker Engine, Docker Compose v2, Node.js 20+, npm, Go,
-Python, `jq`, `git`, `wget`, `curl`, `sar` e `netcat`. Depois, `npm run setup`
+Python, `jq`, `git`, `wget`, `curl`, `sar` e `netcat`. Esse deve ser o primeiro
+comando executado em uma máquina nova. Depois, `npm run setup`
 instala os pacotes Node pelos lockfiles e cria `.venv` com as dependências
 Python dos relatórios. Ajuste `.env` para mudar número de rodadas, workers,
 orderers, portas ou versões.
@@ -27,7 +28,7 @@ orderers, portas ou versões.
 Para somente verificar uma máquina já configurada:
 
 ```bash
-npm run check:system
+bash scripts/install_dependencies.sh --check
 ```
 
 ## Rede Fabric (padrão)
