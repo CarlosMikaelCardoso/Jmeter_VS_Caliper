@@ -29,6 +29,14 @@ docker info
 
 Depois que `docker info` funcionar sem `sudo`, execute `npm run setup`.
 
+Se o npm retornar `EACCES` dentro de `node_modules`, corrija o ownership uma
+vez, sem executar npm como root:
+
+```bash
+sudo chown -R "$USER":"$(id -gn)" node_modules middleware/node_modules api-besu/node_modules
+npm run setup
+```
+
 O instalador configura Docker Engine, Docker Compose v2, Node.js 20+, npm, Go,
 Python, `jq`, `git`, `wget`, `curl`, `sar` e `netcat`. Esse deve ser o primeiro
 comando executado em uma máquina nova. Depois, `npm run setup`
