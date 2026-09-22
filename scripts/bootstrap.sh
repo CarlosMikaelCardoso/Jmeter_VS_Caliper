@@ -7,46 +7,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/config.sh"
 
-install_system_dependencies() {
-    local missing=()
-    local command
-    for command in curl git go jq python3 wget; do
-        command -v "${command}" >/dev/null 2>&1 || missing+=("${command}")
-    done
-
-    if ! command -v sar >/dev/null 2>&1; then
-        missing+=("sysstat")
-    fi
-    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-        missing+=("nodejs" "npm")
-    fi
-    if ! command -v docker >/dev/null 2>&1; then
-        missing+=("docker.io")
-    fi
-
-    if ((${#missing[@]} == 0)); then
-        return
-    fi
-
-    command -v sudo >/dev/null 2>&1 || die "sudo é necessário para instalar dependências do sistema"
-    echo "[INFO] Instalando dependências do sistema: ${missing[*]}"
-    sudo apt-get update
-    local packages=(ca-certificates curl git jq python3-venv wget sysstat nodejs npm docker.io)
-    if ! command -v go >/dev/null 2>&1; then
-        packages+=(golang-go)
-    fi
-    sudo apt-get install -y "${packages[@]}"
-}
-
-configure_docker() {
-    docker info >/dev/null 2>&1 || sudo systemctl start docker
-    docker info >/dev/null 2>&1 || die "Docker não está acessível. Verifique o daemon e as permissões do usuário."
-    docker compose version >/dev/null 2>&1 || die "Docker Compose não está disponível. Instale o plugin 'docker compose'."
-    if ! groups "${USER}" | grep -qw docker; then
-        echo "[WARN] Usuário fora do grupo docker; use 'newgrp docker' ou faça login novamente."
-    fi
-}
-
 install_node_dependencies() {
     local node_major
     node_major="$(node -p 'process.versions.node.split(".")[0]')"
@@ -65,8 +25,8 @@ install_python_dependencies() {
 }
 
 main() {
-    install_system_dependencies
-    configure_docker
+    bash "${SCRIPT_DIR}/install_dependencies.sh"
+    docker info >/dev/null 2>&1 || die "Docker não está acessível. Execute 'newgrp docker' ou faça login novamente."
     install_node_dependencies
     install_python_dependencies
     echo "[OK] Ambiente pronto. Copie .env.example para .env para personalizar a execução."

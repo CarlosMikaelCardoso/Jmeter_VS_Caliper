@@ -6,6 +6,8 @@
   },
   "scripts": {
     "install:all": "npm ci && npm --prefix middleware ci && npm --prefix api-besu ci",
+    "install:system": "bash scripts/install_dependencies.sh",
+    "check:system": "bash scripts/install_dependencies.sh --check",
     "setup": "bash scripts/bootstrap.sh",
     "network:up": "bash scripts/backend.sh network-up",
     "network:down": "bash scripts/backend.sh network-down",
