@@ -92,7 +92,7 @@ do
         echo "[ERRO] Pasta da rodada não encontrada: $ROUND_FOLDER"
     else
         # Executa e captura erro se houver
-        if python3 "$GENERATE_GRAPHS_SCRIPT" "${ROUND_FOLDER}"; then
+        if "${PYTHON_BIN}" "$GENERATE_GRAPHS_SCRIPT" "${ROUND_FOLDER}"; then
             echo "[INFO] Gráficos gerados com sucesso em: ${ROUND_FOLDER}/graphs"
         else
             echo "[INFO] FALHA na geração dos gráficos. Verifique se o 'pandas' está instalado."

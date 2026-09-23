@@ -46,6 +46,10 @@ install_python_dependencies() {
     "${venv}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt"
 }
 
+check_python_environment() {
+    [[ -x "${PYTHON_BIN}" ]] || die "Ambiente Python não encontrado. Execute primeiro: npm run setup"
+}
+
 main() {
     require_command node
     require_command npm
@@ -56,6 +60,7 @@ main() {
     require_docker_access
     install_node_dependencies
     install_python_dependencies
+    check_python_environment
     echo "[OK] Ambiente pronto. Copie .env.example para .env para personalizar a execução."
 }
 

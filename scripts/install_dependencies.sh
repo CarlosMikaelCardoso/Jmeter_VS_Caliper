@@ -4,6 +4,7 @@ set -o nounset
 set -o pipefail
 
 MIN_NODE_MAJOR=20
+DOCKER_MAJOR=28
 CHECK_ONLY=false
 
 usage() {
@@ -11,6 +12,7 @@ usage() {
 Uso: scripts/install_dependencies.sh [--check]
 
 Instala as dependencias do sistema para executar Fabric/Besu, JMeter e Caliper.
+Usa Docker 28.x para compatibilidade com o builder do Fabric 2.5.14.
 --check  apenas verifica as ferramentas, sem instalar nada.
 EOF
 }
@@ -60,17 +62,54 @@ install_node() {
 }
 
 install_docker() {
-    if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
-        echo "[INFO] Instalando Docker Engine e Docker Compose v2"
+    local docker_major=0
+    local docker_version=""
+    local distro_id
+    local distro_codename
+    local candidate_codename
+    local docker_repo_url
+    if command -v docker >/dev/null 2>&1; then
+        docker_major="$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1 || echo 0)"
+    fi
+
+    if ((docker_major != DOCKER_MAJOR)) || ! docker compose version >/dev/null 2>&1; then
+        echo "[INFO] Instalando Docker Engine ${DOCKER_MAJOR}.x e Docker Compose v2"
+        distro_id="$(. /etc/os-release && echo "${ID}")"
+        distro_codename="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")"
+        case "${distro_id}" in
+            ubuntu) docker_repo_url="https://download.docker.com/linux/ubuntu" ;;
+            debian) docker_repo_url="https://download.docker.com/linux/debian" ;;
+            *)
+                echo "[ERRO] Distribuição não suportada pelo instalador Docker APT: ${distro_id}" >&2
+                echo "[AÇÃO] Instale Docker ${DOCKER_MAJOR}.x manualmente e execute: bash scripts/install_dependencies.sh --check" >&2
+                return 1
+                ;;
+        esac
         sudo install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        curl -fsSL "${docker_repo_url}/gpg" | \
             sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
         sudo chmod a+r /etc/apt/keyrings/docker.gpg
-        printf '%s\n' \
-            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"${VERSION_CODENAME}\") stable" | \
-            sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-        sudo apt-get update
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+        for candidate_codename in "${distro_codename}" noble jammy; do
+            [[ -n "${candidate_codename}" ]] || continue
+            printf '%s\n' \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_repo_url} ${candidate_codename} stable" | \
+                sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+            sudo apt-get update || continue
+            docker_version="$(apt-cache madison docker-ce | awk -v major=":${DOCKER_MAJOR}." '$3 ~ major {print $3; exit}')"
+            [[ -n "${docker_version}" ]] && break
+        done
+
+        [[ -n "${docker_version}" ]] || {
+            echo "[ERRO] Docker ${DOCKER_MAJOR}.x não está disponível no repositório configurado." >&2
+            echo "[AÇÃO] Verifique as versões com: apt-cache madison docker-ce" >&2
+            echo "[AÇÃO] Em Ubuntu 26.04, use uma VM Ubuntu 24.04 (noble) para este laboratório ou instale Docker 28 manualmente." >&2
+            return 1
+        }
+        sudo apt-get install -y --allow-downgrades \
+            "docker-ce=${docker_version}" \
+            "docker-ce-cli=${docker_version}" \
+            containerd.io docker-buildx-plugin docker-compose-plugin
     fi
 }
 
@@ -115,6 +154,15 @@ check_tools() {
     else
         echo "[ERRO] docker compose ausente"
         failed=1
+    fi
+
+    if command -v docker >/dev/null 2>&1; then
+        local docker_major
+        docker_major="$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1 || echo 0)"
+        if [[ "${docker_major}" != "${DOCKER_MAJOR}" ]]; then
+            echo "[ERRO] Docker ${docker_major}.x encontrado; esperado: Docker ${DOCKER_MAJOR}.x"
+            failed=1
+        fi
     fi
 
     if command -v node >/dev/null 2>&1; then

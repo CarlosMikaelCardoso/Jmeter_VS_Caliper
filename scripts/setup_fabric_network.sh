@@ -12,11 +12,23 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "${SCRIPT_DIR}/lib/config.sh"
 export CONTAINER_CLI_COMPOSE="${CONTAINER_CLI_COMPOSE:-docker compose}"
 export DOCKER_HOST="unix:///var/run/docker.sock"
+MAX_TESTED_DOCKER_MAJOR=28
 
 NETWORK_DIR="${PROJECT_ROOT}/network"
 CHAINCODE_DIR="${PROJECT_ROOT}/contracts/simple/go"
 API_CONFIG_DIR="${PROJECT_ROOT}/middleware"
 API_WALLET_DIR="${PROJECT_ROOT}/middleware/wallet"
+
+check_docker_compatibility() {
+    local server_version
+    local docker_major
+    server_version="$(docker version --format '{{.Server.Version}}')"
+    docker_major="${server_version%%.*}"
+    if ((docker_major > MAX_TESTED_DOCKER_MAJOR)); then
+        echo "[WARN] Docker ${server_version} está acima da versão máxima testada (${MAX_TESTED_DOCKER_MAJOR}.x) com Fabric 2.5.14." >&2
+        echo "[WARN] Se o chaincode falhar com 'broken pipe', use Docker 27/28 ou um builder externo CCAAS." >&2
+    fi
+}
 
 function network_down(){
     require_docker_access
@@ -87,6 +99,7 @@ main() {
 
     bash "${SCRIPT_DIR}/bootstrap.sh"
     require_docker_access
+    check_docker_compatibility
     require_command go
     if [[ -f "${NETWORK_DIR}/test-network/network.sh" ]]; then
         network_down || true

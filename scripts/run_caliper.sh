@@ -29,7 +29,7 @@ cleanup() {
 caliper_setup() {
     echo "[INFO] Verificando instalação do Caliper"
     cd "${PROJECT_ROOT}"
-    
+
     # 1. Verifica se a CLI do Caliper já existe
     npx --no-install caliper --version > /dev/null 2>&1 || \
         die "Caliper não está instalado. Execute 'npm run setup'."
@@ -49,7 +49,7 @@ caliper_setup() {
 calculate_tx_params() {
     local WORKERS=$1
     local LOOPS_PER_WORKER
-    
+
     if [ "$WORKERS" -eq 5 ]; then
         LOOPS_PER_WORKER=200;
     elif [ "$WORKERS" -eq 10 ]; then
@@ -61,10 +61,10 @@ calculate_tx_params() {
     else
         LOOPS_PER_WORKER=200;
     fi
-    
+
     # Base Total (para Open e Query)
     TOTAL_TX=$((WORKERS * LOOPS_PER_WORKER))
-    
+
     echo "[INFO] Configuração Base"
     echo "[INFO] Workers: ${WORKERS} | Base Total Tx: ${TOTAL_TX}"
 }
@@ -77,16 +77,16 @@ run_caliper_test() {
     local RUN_NUMBER=$3
     local ROUND_LABEL_LOWER=$(echo "$ROUND_NAME" | tr '[:upper:]' '[:lower:]')
     local LOG_FILE="${RESULTS_DIR}/caliper_log_${ROUND_LABEL_LOWER}_run_${RUN_NUMBER}.txt"
-    
+
     # Calcula carga base
     calculate_tx_params "${NUM_WORKERS}"
-    
+
     # Escreve o ID da rodada em arquivo físico para o Node.js ler
     echo "${RUN_NUMBER}" > "${BENCHMARK_DIR}/current_round.txt"
 
     # Reduz carga se for Transfer
     local ACTUAL_TX=${TOTAL_TX}
-    
+
     if [ "$ROUND_NAME" == "Transfer" ]; then
         ACTUAL_TX=$((TOTAL_TX / 2))
         # Garante que seja pelo menos 1
@@ -95,20 +95,20 @@ run_caliper_test() {
     fi
 
     echo "[RUN] [Run ${RUN_NUMBER}] Iniciando Benchmark: ${ROUND_NAME}"
-    
+
     # Substitui Worker e TxNumber (considerando âncoras e normal)
     sed -e "s/number: [0-9]\+/number: ${NUM_WORKERS}/" \
         -e "s/numberOfAccounts: &number-of-accounts [0-9]\+/numberOfAccounts: \&number-of-accounts ${ACTUAL_TX}/" \
         -e "s/txNumber: [0-9]\+/txNumber: ${ACTUAL_TX}/" \
         "${CONFIG_FILE}" > "${TEMP_CONFIG_FILE}"
-    
+
     # Inicia Monitoramento
     curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": ${RUN_NUMBER}}" \
         "${MONITOR_API_URL}/monitor/start" || true
 
     cd "${PROJECT_ROOT}"
-    
+
     echo "[RUN] Executando Caliper... Logs em: ${LOG_FILE}"
     npx --no-install caliper launch manager \
         --caliper-workspace "${PROJECT_ROOT}" \
@@ -124,7 +124,7 @@ run_caliper_test() {
     curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"roundName\": \"${ROUND_NAME}\", \"runNumber\": ${RUN_NUMBER}}" \
         "${MONITOR_API_URL}/monitor/stop" || true
-        
+
     curl -s -o "${RESULTS_DIR}/docker_stats_${ROUND_LABEL_LOWER}_run_${RUN_NUMBER}.log" \
         "${MONITOR_API_URL}/monitor/logs/${ROUND_NAME}/${RUN_NUMBER}" || true
 }
@@ -145,11 +145,11 @@ main() {
     echo "[INFO] Gerando gráficos consolidados"
     if [ -f "$GENERATE_GRAPHS_SCRIPT" ]; then
         # Pode ajustar para rodar apenas no final de tudo se preferir
-        python3 "$GENERATE_GRAPHS_SCRIPT" "${RESULTS_DIR}" 1 || true
+        "${PYTHON_BIN}" "$GENERATE_GRAPHS_SCRIPT" "${RESULTS_DIR}" 1 || true
     else
         echo "[ERRO] Script de gráficos não encontrado."
     fi
-    
+
     echo "[INFO] Rodada ${GLOBAL_RUN_ID} Concluída! Resultados em: ${RESULTS_DIR}"
 }
 

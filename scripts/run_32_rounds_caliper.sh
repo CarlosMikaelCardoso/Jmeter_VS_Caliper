@@ -70,7 +70,7 @@ do
 
     # Gera gráficos da rodada individual
     if [ -f "$GENERATE_GRAPHS_SCRIPT" ]; then
-        python3 "$GENERATE_GRAPHS_SCRIPT" "${ROUND_FOLDER}"
+        "${PYTHON_BIN}" "$GENERATE_GRAPHS_SCRIPT" "${ROUND_FOLDER}"
     fi
 
     sleep 2

@@ -6,9 +6,14 @@ Besu usando JMeter e Hyperledger Caliper. O fluxo comum é selecionado por
 
 ## Pré-requisitos
 
-- Ubuntu/Debian com acesso a `sudo`;
+- Ubuntu 20.04, 22.04 ou 24.04 LTS com acesso a `sudo`;
+- Ubuntu 24.04 LTS (Noble) é a versão máxima recomendada pelo instalador;
 - usuário com permissão para usar Docker;
 - conexão com a internet durante a instalação das ferramentas e imagens Fabric.
+
+Ubuntu 26.04 ainda não é considerado suportado para este laboratório. A
+combinação validada usa Docker 28.x com Fabric 2.5.14 e o repositório Docker
+para Ubuntu 24.04 (`noble`).
 
 ## Instalação
 
@@ -37,7 +42,7 @@ sudo chown -R "$USER":"$(id -gn)" node_modules middleware/node_modules api-besu/
 npm run setup
 ```
 
-O instalador configura Docker Engine, Docker Compose v2, Node.js 20+, npm, Go,
+O instalador configura Docker Engine 28.x, Docker Compose v2, Node.js 20+, npm, Go,
 Python, `jq`, `git`, `wget`, `curl`, `sar` e `netcat`. Esse deve ser o primeiro
 comando executado em uma máquina nova. Depois, `npm run setup`
 instala os pacotes Node pelos lockfiles e cria `.venv` com as dependências

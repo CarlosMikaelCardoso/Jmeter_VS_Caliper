@@ -3,6 +3,7 @@
 # Diretórios Base
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PYTHON_BIN="${PROJECT_ROOT}/.venv/bin/python"
 JMETER_RESULTS="${PROJECT_ROOT}/results/jmeter_runs"
 CALIPER_RESULTS="${PROJECT_ROOT}/results/caliper_runs"
 
@@ -23,7 +24,7 @@ echo "==========================================================="
 
 # 1. Verifica Dependências Python
 echo -n ">>> Verificando Pandas... "
-if python3 -c "import pandas" 2>/dev/null; then
+if "${PYTHON_BIN}" -c "import pandas" 2>/dev/null; then
     echo -e "${GREEN}OK${NC}"
 else
     echo -e "${RED}ERRO: Biblioteca 'pandas' não instalada.${NC}"
@@ -36,7 +37,7 @@ process_folder() {
     local INPUT_DIR=$2
     local OUTPUT_DIR="${INPUT_DIR}/article_assets"
 
-    if [ -z "$INPUT_DIR" ] || [ ! -d "$INPUT_DIR" ]; then 
+    if [ -z "$INPUT_DIR" ] || [ ! -d "$INPUT_DIR" ]; then
         echo -e "${RED}Aviso: Diretório inválido ou não encontrado: '$INPUT_DIR'${NC}"
         return
     fi
@@ -46,14 +47,14 @@ process_folder() {
 
     echo "   -> Gerando Tabela de Performance..."
     if [ "$TOOL_NAME" == "JMeter" ]; then
-        python3 "$SCRIPT_TABLE_JMETER" "$INPUT_DIR" "$OUTPUT_DIR"
+        "${PYTHON_BIN}" "$SCRIPT_TABLE_JMETER" "$INPUT_DIR" "$OUTPUT_DIR"
     else
-        python3 "$SCRIPT_TABLE_CALIPER" "$INPUT_DIR" "$OUTPUT_DIR"
+        "${PYTHON_BIN}" "$SCRIPT_TABLE_CALIPER" "$INPUT_DIR" "$OUTPUT_DIR"
     fi
-    
+
     echo "   -> Gerando Gráficos de Recursos..."
-    python3 "$SCRIPT_CHART_RESOURCES" "$INPUT_DIR" "$OUTPUT_DIR"
-    
+    "${PYTHON_BIN}" "$SCRIPT_CHART_RESOURCES" "$INPUT_DIR" "$OUTPUT_DIR"
+
     echo -e "${GREEN}   -> Ativos salvos em: $OUTPUT_DIR${NC}"
 }
 
@@ -61,22 +62,22 @@ process_folder() {
 consolidate_files() {
     local BASE_DIR=$1
     local TEMP_DIR="${BASE_DIR}/CONSOLIDATED_FINAL"
-    
+
     mkdir -p "$TEMP_DIR"
     echo "   -> Coletando arquivos de $BASE_DIR..." >&2
-    
+
     # 1. COPIA ARQUIVOS DA RAIZ (Para arquivos que não foram movidos, ex: caliper logs .txt)
     # Procura arquivos que tenham 'run_' no nome para garantir que são de teste
     find "$BASE_DIR" -maxdepth 1 -type f -name "*run_*.txt" -o -name "*run_*.log" | while read f; do
         cp -f "$f" "${TEMP_DIR}/"
     done
-    
+
     # 2. COPIA ARQUIVOS DAS PASTAS round_*
     count=0
     for round_dir in "$BASE_DIR"/round_*; do
         if [ -d "$round_dir" ]; then
             round_num=$(basename "$round_dir" | grep -oE '[0-9]+')
-            
+
             # JMETER (.jtl, .csv)
             find "$round_dir" -maxdepth 1 -name "*.jtl" -o -name "*.csv" | while read f; do
                 filename=$(basename "$f"); ext="${filename##*.}"

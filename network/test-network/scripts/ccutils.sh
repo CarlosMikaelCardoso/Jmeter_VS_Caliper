@@ -2,14 +2,47 @@
 
 
 # installChaincode PEER ORG
+function diagnoseChaincodeBuilder() {
+  local peer_container="peer0.org${1}.example.com"
+  infoln "Verificando builder Docker antes da instalação no peer0.org${1}..."
+  println "- CORE_VM_ENDPOINT: ${CORE_VM_ENDPOINT:-não definido}"
+  println "- CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE: ${CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE:-não definido}"
+  println "- CORE_PEER_ADDRESS: ${CORE_PEER_ADDRESS:-não definido}"
+  println "- host Docker: ${DOCKER_HOST:-unix:///var/run/docker.sock}"
+  println "- variáveis Docker do container:"
+  docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${peer_container}" | grep -E '^(CORE_VM|DOCKER_HOST)=' || true
+
+  if ! docker info >/dev/null 2>&1; then
+    fatalln "Docker daemon não está acessível no host antes do installChaincode."
+  fi
+
+  if ! docker inspect "${peer_container}" >/dev/null 2>&1; then
+    fatalln "Container ${peer_container} não está disponível para verificar o socket Docker."
+  fi
+
+  if ! docker exec "${peer_container}" sh -c 'test -S /host/var/run/docker.sock'; then
+    fatalln "Socket Docker não está montado em ${peer_container}:/host/var/run/docker.sock."
+  fi
+
+  successln "Builder Docker acessível para ${peer_container}"
+}
+
 function installChaincode() {
   ORG=$1
   setGlobals $ORG
   set -x
   peer lifecycle chaincode queryinstalled --output json | jq -r 'try (.installed_chaincodes[].package_id)' | grep ^${PACKAGE_ID}$ >&log.txt
   if test $? -ne 0; then
+    diagnoseChaincodeBuilder "$ORG"
+    infoln "Executando: peer lifecycle chaincode install ${CC_NAME}.tar.gz"
     peer lifecycle chaincode install ${CC_NAME}.tar.gz >&log.txt
     res=$?
+    if test $res -ne 0; then
+      errorln "Falha no installChaincode; estado do Docker após o erro:"
+      docker version --format 'client={{.Client.Version}} server={{.Server.Version}}' 2>&1 || true
+      docker info --format 'containers={{.Containers}} images={{.Images}} driver={{.Driver}}' 2>&1 || true
+      docker inspect --format 'peer_status={{.State.Status}} peer_restart_count={{.RestartCount}}' "peer0.org${ORG}.example.com" 2>&1 || true
+    fi
   fi
   { set +x; } 2>/dev/null
   cat log.txt
