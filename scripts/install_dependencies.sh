@@ -64,12 +64,15 @@ install_node() {
 install_docker() {
     local docker_major=0
     local docker_version=""
+    local cli_version=""
     local distro_id
     local distro_codename
     local candidate_codename
     local docker_repo_url
+
     if command -v docker >/dev/null 2>&1; then
-        docker_major="$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1 || echo 0)"
+        docker_major="$(docker version --format '{{.Client.Version}}' 2>/dev/null | cut -d. -f1 || true)"
+        [[ -n "${docker_major}" ]] || docker_major=0
     fi
 
     if ((docker_major != DOCKER_MAJOR)) || ! docker compose version >/dev/null 2>&1; then
@@ -85,35 +88,63 @@ install_docker() {
                 return 1
                 ;;
         esac
-        sudo install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL "${docker_repo_url}/gpg" | \
-            sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
-        sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-        for candidate_codename in "${distro_codename}" noble jammy; do
+        # Remove pacotes antigos/conflitantes do Ubuntu (docker.io, containerd canonical, runc)
+        echo "[INFO] Removendo pacotes Docker/Containerd conflitantes do repositório da distribuição..."
+        sudo apt-get remove -y docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc || true
+
+        # Configura chave GPG oficial do Docker
+        sudo install -m 0755 -d /etc/apt/keyrings
+        sudo curl -fsSL "${docker_repo_url}/gpg" -o /etc/apt/keyrings/docker.asc
+        sudo chmod a+r /etc/apt/keyrings/docker.asc
+        if command -v gpg >/dev/null 2>&1; then
+            sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg < /etc/apt/keyrings/docker.asc 2>/dev/null || true
+            sudo chmod a+r /etc/apt/keyrings/docker.gpg 2>/dev/null || true
+        fi
+
+        # Para distros LTS conhecidas, usa o codename exato.
+        # Fallback para noble/jammy apenas se for uma versão desconhecida/mais nova.
+        local candidate_codenames=("${distro_codename}")
+        case "${distro_codename}" in
+            jammy|noble|focal|bookworm|bullseye)
+                ;;
+            *)
+                candidate_codenames+=("noble" "jammy")
+                ;;
+        esac
+
+        for candidate_codename in "${candidate_codenames[@]}"; do
             [[ -n "${candidate_codename}" ]] || continue
             printf '%s\n' \
-                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_repo_url} ${candidate_codename} stable" | \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] ${docker_repo_url} ${candidate_codename} stable" | \
                 sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-            sudo apt-get update || continue
-            docker_version="$(apt-cache madison docker-ce | awk -v major=":${DOCKER_MAJOR}." '$3 ~ major {print $3; exit}')"
+            sudo apt-get update || true
+            docker_version="$(apt-cache madison docker-ce 2>/dev/null | awk -v major=":${DOCKER_MAJOR}." '$3 ~ major && !found {found=$3} END {if (found) print found}')"
             [[ -n "${docker_version}" ]] && break
         done
 
         [[ -n "${docker_version}" ]] || {
             echo "[ERRO] Docker ${DOCKER_MAJOR}.x não está disponível no repositório configurado." >&2
             echo "[AÇÃO] Verifique as versões com: apt-cache madison docker-ce" >&2
-            echo "[AÇÃO] Em Ubuntu 26.04, use uma VM Ubuntu 24.04 (noble) para este laboratório ou instale Docker 28 manualmente." >&2
+            echo "[AÇÃO] Em Ubuntu 26.04 ou versões experimentais, use uma VM Ubuntu 22.04 (jammy) ou 24.04 (noble)." >&2
             return 1
         }
+
+        cli_version="$(apt-cache madison docker-ce-cli 2>/dev/null | awk -v major=":${DOCKER_MAJOR}." '$3 ~ major && !found {found=$3} END {if (found) print found}')"
+        [[ -n "${cli_version}" ]] || cli_version="${docker_version}"
+
+        echo "[INFO] Instalando pacotes Docker 28: docker-ce=${docker_version} docker-ce-cli=${cli_version}"
+        sudo apt-mark unhold docker-ce docker-ce-cli containerd.io 2>/dev/null || true
         sudo apt-get install -y --allow-downgrades \
             "docker-ce=${docker_version}" \
-            "docker-ce-cli=${docker_version}" \
+            "docker-ce-cli=${cli_version}" \
             containerd.io docker-buildx-plugin docker-compose-plugin
+        sudo apt-mark hold docker-ce docker-ce-cli 2>/dev/null || true
     fi
 }
 
 configure_docker() {
+    sudo systemctl daemon-reload 2>/dev/null || true
     if ! sudo systemctl enable --now docker; then
         echo "[ERRO] Docker não iniciou. Últimos eventos do docker.service:" >&2
         sudo journalctl -u docker.service -n 80 --no-pager >&2 || true
@@ -124,10 +155,13 @@ configure_docker() {
             echo "(daemon.json ausente)" >&2
         return 1
     fi
+
+    sudo usermod -aG docker "${USER}" || true
+
     if ! docker info >/dev/null 2>&1; then
-        echo "[WARN] Docker foi instalado, mas este usuário ainda não tem acesso ao socket." >&2
-        echo "[AÇÃO] Execute manualmente: sudo usermod -aG docker ${USER}" >&2
-        echo "[AÇÃO] Depois execute: newgrp docker (ou faça logout/login)" >&2
+        echo "[WARN] Docker foi instalado e o serviço está ativo." >&2
+        echo "[WARN] O usuário '${USER}' foi adicionado ao grupo 'docker', mas as permissões ainda não estão ativas nesta sessão de terminal." >&2
+        echo "[AÇÃO] Execute no terminal: newgrp docker (ou faça logout e login novamente na VM)." >&2
         return 0
     fi
 
@@ -158,9 +192,12 @@ check_tools() {
 
     if command -v docker >/dev/null 2>&1; then
         local docker_major
-        docker_major="$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1 || echo 0)"
+        docker_major="$(docker version --format '{{.Client.Version}}' 2>/dev/null | cut -d. -f1 || true)"
+        if [[ -z "${docker_major}" ]] && command -v sudo >/dev/null 2>&1; then
+            docker_major="$(sudo docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1 || true)"
+        fi
         if [[ "${docker_major}" != "${DOCKER_MAJOR}" ]]; then
-            echo "[ERRO] Docker ${docker_major}.x encontrado; esperado: Docker ${DOCKER_MAJOR}.x"
+            echo "[ERRO] Docker ${docker_major:-desconhecido}.x encontrado; esperado: Docker ${DOCKER_MAJOR}.x"
             failed=1
         fi
     fi

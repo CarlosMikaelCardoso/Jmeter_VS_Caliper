@@ -117,8 +117,11 @@ def plot_combined_table(summary_list, output_path):
     df.to_csv(os.path.join(output_path, "round_performance_summary.csv"), index=False, float_format="%.4f")
     
     # 2. Salva LaTeX
-    latex_code = df.to_latex(index=False, float_format="%.3f", caption="Round Performance Summary", label="tab:round_perf")
-    with open(os.path.join(output_path, "round_performance_summary.tex"), "w") as f: f.write(latex_code)
+    try:
+        latex_code = df.to_latex(index=False, float_format="%.3f", caption="Round Performance Summary", label="tab:round_perf")
+        with open(os.path.join(output_path, "round_performance_summary.tex"), "w") as f: f.write(latex_code)
+    except Exception as e:
+        print(f"[WARN] Falha ao gerar LaTeX (round_performance_summary.tex): {e}")
 
     # 3. Salva PNG (Bonito)
     fig, ax = plt.subplots(figsize=(8, 3))

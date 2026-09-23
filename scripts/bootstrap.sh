@@ -48,6 +48,8 @@ install_python_dependencies() {
 
 check_python_environment() {
     [[ -x "${PYTHON_BIN}" ]] || die "Ambiente Python não encontrado. Execute primeiro: npm run setup"
+    "${PYTHON_BIN}" -c "import bs4, jinja2, matplotlib, numpy, pandas, seaborn, tabulate" 2>/dev/null || \
+        die "Dependências Python ausentes ou incompletas no venv. Execute: npm run setup"
 }
 
 main() {

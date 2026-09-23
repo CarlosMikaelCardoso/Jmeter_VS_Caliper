@@ -95,7 +95,7 @@ do
         if "${PYTHON_BIN}" "$GENERATE_GRAPHS_SCRIPT" "${ROUND_FOLDER}"; then
             echo "[INFO] Gráficos gerados com sucesso em: ${ROUND_FOLDER}/graphs"
         else
-            echo "[INFO] FALHA na geração dos gráficos. Verifique se o 'pandas' está instalado."
+            echo "[ERRO] Falha na geração dos gráficos para ${ROUND_FOLDER}."
         fi
     fi
     

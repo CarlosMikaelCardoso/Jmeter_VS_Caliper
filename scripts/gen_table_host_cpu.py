@@ -85,16 +85,18 @@ def main():
         # Gera Tabela LaTeX (útil para seu artigo)
         output_tex = output_csv.replace(".csv", ".tex")
         
-        latex_content = df.to_latex(
-            index=False,
-            caption=f"Consumo de CPU (%user) do Host - {len(results)} Rodadas",
-            label="tab:cpu_usage",
-            column_format="c c c c"
-        )
-        
-        with open(output_tex, "w") as f:
-            f.write(latex_content)
-        print(f"✅ LaTeX salvo: {output_tex}")
+        try:
+            latex_content = df.to_latex(
+                index=False,
+                caption=f"Consumo de CPU (%user) do Host - {len(results)} Rodadas",
+                label="tab:cpu_usage",
+                column_format="c c c c"
+            )
+            with open(output_tex, "w") as f:
+                f.write(latex_content)
+            print(f"✅ LaTeX salvo: {output_tex}")
+        except Exception as e:
+            print(f"⚠️ [WARN] Falha ao gerar LaTeX ({output_tex}): {e}")
         
         # Exibe resumo rápido
         print("\nResumo Geral CPU (%user):")
