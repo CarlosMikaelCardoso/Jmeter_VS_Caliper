@@ -8,12 +8,13 @@ import sys
 import glob
 import re
 
-# Tenta usar estilo científico
+# Tenta usar estilo científico sem exigir instalação do TeX/LaTeX no SO
 try:
     import scienceplots
-    plt.style.use(['science', 'ieee', 'high-vis'])
-except:
+    plt.style.use(['science', 'no-latex', 'ieee', 'high-vis'])
+except Exception:
     plt.style.use('seaborn-v0_8-paper')
+plt.rcParams['text.usetex'] = False
 
 def clean_metric(val):
     """Remove % e unidades e converte para float"""

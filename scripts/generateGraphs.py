@@ -8,12 +8,13 @@ import sys
 import glob
 import re
 
-# Tenta usar estilo científico
+# Tenta usar estilo científico sem exigir instalação do TeX/LaTeX no SO
 try:
     import scienceplots
-    plt.style.use(['science', 'ieee', 'high-vis'])
-except:
+    plt.style.use(['science', 'no-latex', 'ieee', 'high-vis'])
+except Exception:
     plt.style.use('seaborn-v0_8-paper')
+plt.rcParams['text.usetex'] = False
 
 # --- CONFIGURAÇÕES VISUAIS ---
 NODE_COLORS = {
@@ -80,12 +81,24 @@ def parse_jmeter_jtl(jtl_file, round_name, run_number, backend_errors_df):
         'TPS': tps_real
     }
 
+import logging
+logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+
 def analyze_docker_stats(stats_file):
     try:
         if not os.path.exists(stats_file) or os.stat(stats_file).st_size == 0: return None
         
         df = None
-        if stats_file.endswith('.json'):
+        # Verifica se o arquivo é CSV mesmo com extensão .json
+        try:
+            with open(stats_file, 'r', errors='ignore') as f:
+                first_line = f.readline().strip()
+            if 'container' in first_line.lower() or ',' in first_line:
+                df = pd.read_csv(stats_file)
+        except Exception:
+            pass
+
+        if df is None and stats_file.endswith('.json'):
             try: df = pd.read_json(stats_file)
             except ValueError:
                 try: df = pd.read_json(stats_file, lines=True)
@@ -105,7 +118,46 @@ def analyze_docker_stats(stats_file):
             df['cpu'] = df['cpu'].apply(clean_metric)
             df['mem'] = df['mem'].apply(clean_metric)
             return df
-    except: return None
+    except Exception as e:
+        print(f"⚠️ [WARN] Falha ao analisar {stats_file}: {e}")
+        return None
+
+def plot_performance_charts(summary_list, output_path):
+    """ Gera Gráficos de Desempenho (Throughput TPS e Latência) em PNG e PDF """
+    if not summary_list: return
+    df = pd.DataFrame(summary_list)
+    
+    colors = ['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728'][:len(df)]
+    
+    # 1. Gráfico de Throughput (TPS)
+    plt.figure(figsize=(7, 4.5))
+    bars = plt.bar(df['Scenario'], df['TPS'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
+    plt.ylabel('Throughput (TPS)')
+    plt.title('Vazão (TPS) por Cenário')
+    plt.grid(axis='y', linestyle='--', alpha=0.3)
+    max_tps = df['TPS'].max() if not df['TPS'].empty else 0
+    plt.ylim(0, max_tps * 1.25 if max_tps > 0 else 10)
+    plt.bar_label(bars, labels=[f"{v:.2f}" for v in df['TPS']], padding=3, fontsize=9)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_path, "chart_throughput.png"), bbox_inches='tight', dpi=150)
+    plt.savefig(os.path.join(output_path, "chart_throughput.pdf"), bbox_inches='tight')
+    plt.close()
+    print("  -> Gráfico gerado: chart_throughput.png / .pdf")
+
+    # 2. Gráfico de Latência Média (s)
+    plt.figure(figsize=(7, 4.5))
+    bars = plt.bar(df['Scenario'], df['Avg Latency (s)'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
+    plt.ylabel('Latência Média (s)')
+    plt.title('Latência Média por Cenário')
+    plt.grid(axis='y', linestyle='--', alpha=0.3)
+    max_lat = df['Avg Latency (s)'].max() if not df['Avg Latency (s)'].empty else 0
+    plt.ylim(0, max_lat * 1.25 if max_lat > 0 else 1)
+    plt.bar_label(bars, labels=[f"{v:.3f}s" for v in df['Avg Latency (s)']], padding=3, fontsize=9)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_path, "chart_latency.png"), bbox_inches='tight', dpi=150)
+    plt.savefig(os.path.join(output_path, "chart_latency.pdf"), bbox_inches='tight')
+    plt.close()
+    print("  -> Gráfico gerado: chart_latency.png / .pdf")
 
 def plot_combined_table(summary_list, output_path):
     """ Gera Tabela Unificada (PNG, CSV, LaTeX) """
@@ -114,7 +166,8 @@ def plot_combined_table(summary_list, output_path):
     df = pd.DataFrame(summary_list)
     
     # 1. Salva CSV
-    df.to_csv(os.path.join(output_path, "round_performance_summary.csv"), index=False, float_format="%.4f")
+    csv_file = os.path.join(output_path, "round_performance_summary.csv")
+    df.to_csv(csv_file, index=False, float_format="%.4f")
     
     # 2. Salva LaTeX
     try:
@@ -147,16 +200,22 @@ def plot_combined_table(summary_list, output_path):
     table.scale(1.2, 1.5)
     
     plt.title("Resumo de Desempenho (Rodada)", fontsize=14, weight='bold')
-    plt.savefig(os.path.join(output_path, "round_performance_summary.png"), bbox_inches='tight', dpi=150)
+    table_img = os.path.join(output_path, "round_performance_summary.png")
+    plt.savefig(table_img, bbox_inches='tight', dpi=150)
     plt.close()
+    print(f"  -> Tabela gerada: round_performance_summary.png / .csv / .tex")
 
 def plot_resource_charts(df, scenario, output_path):
-    """ Gera Gráficos de Recursos V2 (Estilo Consolidado) """
+    """ Gera Gráficos de Recursos V2 (Estilo Consolidado) em PNG e PDF """
     if df.empty: return
 
     summary = df.groupby('container')[['cpu', 'mem']].mean()
     valid_indices = [c for c in summary.index if any(x in c.lower() for x in ['orderer', 'peer', 'couch'])]
-    if not valid_indices: return
+    if not valid_indices:
+        valid_indices = list(summary.index)
+    if not valid_indices:
+        return
+        
     summary = summary.loc[valid_indices]
     
     # Ordenação Inteligente
@@ -171,13 +230,15 @@ def plot_resource_charts(df, scenario, output_path):
     # CPU
     plt.figure(figsize=(8, 5))
     bars = plt.bar(summary.index, summary['cpu'], color=colors, alpha=0.9, edgecolor='black', linewidth=0.5)
-    plt.ylabel('CPU Média (Porcentagem)'); plt.title(f'Uso de CPU - {scenario}')
+    plt.ylabel('CPU Média (%)'); plt.title(f'Uso de CPU - {scenario}')
     plt.xticks(rotation=45, ha='right', fontsize=9); plt.grid(axis='y', linestyle='--', alpha=0.3)
     plt.ylim(0, summary['cpu'].max() * 1.3 if summary['cpu'].max() > 0 else 10)
     plt.bar_label(bars, labels=[f"{v:.2f}%" for v in summary['cpu']], padding=3, fontsize=8)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_path, f"bar_cpu_{scenario.lower()}.pdf")) # PDF para qualidade
+    plt.savefig(os.path.join(output_path, f"bar_cpu_{scenario.lower()}.pdf"), bbox_inches='tight')
+    plt.savefig(os.path.join(output_path, f"bar_cpu_{scenario.lower()}.png"), bbox_inches='tight', dpi=150)
     plt.close()
+    print(f"  -> Gráfico gerado: bar_cpu_{scenario.lower()}.png / .pdf")
 
     # Memória
     plt.figure(figsize=(8, 5))
@@ -187,8 +248,10 @@ def plot_resource_charts(df, scenario, output_path):
     plt.ylim(0, summary['mem'].max() * 1.3 if summary['mem'].max() > 0 else 100)
     plt.bar_label(bars, labels=[f"{v:.1f}" for v in summary['mem']], padding=3, fontsize=8)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_path, f"bar_mem_{scenario.lower()}.pdf"))
+    plt.savefig(os.path.join(output_path, f"bar_mem_{scenario.lower()}.pdf"), bbox_inches='tight')
+    plt.savefig(os.path.join(output_path, f"bar_mem_{scenario.lower()}.png"), bbox_inches='tight', dpi=150)
     plt.close()
+    print(f"  -> Gráfico gerado: bar_mem_{scenario.lower()}.png / .pdf")
 
 def main():
     if len(sys.argv) < 2:
@@ -231,10 +294,13 @@ def main():
         if docker_dfs:
             full_df = pd.concat(docker_dfs, ignore_index=True)
             plot_resource_charts(full_df, round_name, graphs_dir)
+        else:
+            print(f"⚠️  [Aviso] Nenhum dado de docker stats encontrado para o cenário: {round_name}")
 
-    # Gera Tabela Consolidada da Rodada
+    # Gera Tabela Consolidada e Gráficos da Rodada
     if summary_list:
         plot_combined_table(summary_list, graphs_dir)
+        plot_performance_charts(summary_list, graphs_dir)
         print("✅ Tabelas e Gráficos gerados com sucesso.")
     else:
         print("⚠️  Nenhum dado de desempenho encontrado.")

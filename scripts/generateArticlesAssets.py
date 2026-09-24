@@ -6,10 +6,11 @@ import glob
 # Tente importar scienceplots, se falhar usa o padrão
 try:
     import scienceplots
-    plt.style.use(['science', 'ieee', 'high-vis']) # high-vis é ótimo para contraste
-except:
+    plt.style.use(['science', 'no-latex', 'ieee', 'high-vis']) # high-vis é ótimo para contraste
+except Exception:
     print("Aviso: SciencePlots não instalado. Usando estilo padrão.")
     plt.style.use('ggplot')
+plt.rcParams['text.usetex'] = False
 
 def generate_article_assets(results_dir):
     print(f"--- Gerando Ativos para Artigo em: {results_dir} ---")

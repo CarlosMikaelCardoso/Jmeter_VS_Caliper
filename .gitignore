@@ -57,3 +57,6 @@ config/
 builders/
 bin/
 results/
+__pycache__/
+*.py[cod]
+.venv/
