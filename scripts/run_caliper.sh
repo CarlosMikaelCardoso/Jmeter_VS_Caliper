@@ -34,13 +34,23 @@ caliper_setup() {
     npx --no-install caliper --version > /dev/null 2>&1 || \
         die "Caliper não está instalado. Execute 'npm run setup'."
 
-    # 2. Verifica se o SDK do Fabric já está vinculado (Bind)
-    # Verifica se a pasta do módulo existe para evitar 'npm install' desnecessário
-    if [ ! -d "node_modules/@hyperledger/fabric-gateway" ]; then
-        echo "[INFO] Realizando Bind do Caliper para Fabric 2.5..."
-        npx --no-install caliper bind --caliper-bind-sut "fabric:${FABRIC_VERSION%.*}"
+    # 2. Bind baseado no BACKEND
+    if [[ "${BACKEND}" == "besu" ]]; then
+        # Bind para Ethereum/Besu
+        if [ ! -d "node_modules/@hyperledger/caliper-ethereum" ]; then
+            echo "[INFO] Realizando Bind do Caliper para Ethereum (Besu)..."
+            npx --no-install caliper bind --caliper-bind-sut "ethereum:latest"
+        else
+            echo "[INFO] Bind do Ethereum detectado. Pulando instalação."
+        fi
     else
-        echo "[INFO] Bind do Fabric detectado (node_modules). Pulando instalação."
+        # Bind para Fabric
+        if [ ! -d "node_modules/@hyperledger/fabric-gateway" ]; then
+            echo "[INFO] Realizando Bind do Caliper para Fabric ${FABRIC_VERSION%.*}..."
+            npx --no-install caliper bind --caliper-bind-sut "fabric:${FABRIC_VERSION%.*}"
+        else
+            echo "[INFO] Bind do Fabric detectado (node_modules). Pulando instalação."
+        fi
     fi
 }
 
@@ -110,11 +120,22 @@ run_caliper_test() {
     cd "${PROJECT_ROOT}"
 
     echo "[RUN] Executando Caliper... Logs em: ${LOG_FILE}"
+    # Seleciona o networkconfig baseado no BACKEND
+    local NETWORK_CONFIG_FILE
+    local EXTRA_FLAGS=""
+    if [[ "${BACKEND}" == "besu" ]]; then
+        NETWORK_CONFIG_FILE="${BENCHMARK_DIR}/networkconfig.json"
+        export CALIPER_FLOW_SKIP_INSTALL=true
+    else
+        NETWORK_CONFIG_FILE="${BENCHMARK_DIR}/network-config.yaml"
+        EXTRA_FLAGS="--caliper-fabric-gateway-enabled"
+    fi
+
     npx --no-install caliper launch manager \
         --caliper-workspace "${PROJECT_ROOT}" \
-        --caliper-networkconfig "${BENCHMARK_DIR}/network-config.yaml" \
+        --caliper-networkconfig "${NETWORK_CONFIG_FILE}" \
         --caliper-benchconfig "${TEMP_CONFIG_FILE}" \
-        --caliper-fabric-gateway-enabled \
+        ${EXTRA_FLAGS} \
         --caliper-report-path "${RESULTS_DIR}/report-${ROUND_LABEL_LOWER}.html" \
         > "${LOG_FILE}" 2>&1
 

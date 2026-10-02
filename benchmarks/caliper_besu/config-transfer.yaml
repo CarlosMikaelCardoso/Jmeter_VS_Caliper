@@ -1,0 +1,23 @@
+simpleArgs: &simple-args
+  initialMoney: 10000
+  moneyToTransfer: 100
+  numberOfAccounts: &number-of-accounts 1000
+
+test:
+  name: simple-transfer
+  description: Rodada de Transfer (Transferência) - Besu
+  workers:
+    number: 5
+  rounds:
+    - label: transfer
+      description: Teste de transferência entre contas no Besu.
+      txNumber: 50
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 5
+      workload:
+        module: benchmarks/caliper_besu/transfer.js
+        arguments:
+          << : *simple-args
+          money: 100

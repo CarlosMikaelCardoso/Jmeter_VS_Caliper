@@ -11,8 +11,10 @@ import re
 try:
     import scienceplots
     plt.style.use(['science', 'no-latex', 'ieee', 'high-vis'])
+    matplotlib.rcParams["text.usetex"] = False
 except Exception:
     plt.style.use('seaborn-v0_8-paper')
+    matplotlib.rcParams["text.usetex"] = False
 plt.rcParams['text.usetex'] = False
 
 def clean_metric(val):

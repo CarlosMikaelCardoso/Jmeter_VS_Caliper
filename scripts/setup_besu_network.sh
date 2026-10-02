@@ -7,8 +7,9 @@ set -o pipefail  # Aborta se algum comando em um pipeline falhar
 # --- Variáveis de Configuração ---
 # O diretório base do projeto (onde este script e outros arquivos estão)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/scripts/lib/config.sh"
+source "${SCRIPT_DIR}/lib/config.sh"
 
 BASE_DIR="${PROJECT_ROOT}"
 BESU_VERSION="${BESU_VERSION:-24.7.0}"
@@ -25,8 +26,8 @@ cleanup() {
     if [[ -f "${BASE_DIR}/docker-compose.yaml" ]]; then
         docker compose -f "${BASE_DIR}/docker-compose.yaml" down --volumes --remove-orphans || true
     fi
-    # Remove diretórios e arquivos gerados
-    sudo rm -rf besu-* "${JAVA_VERSION}" networkFiles Permissioned-Network/ genesis.json
+    # Remove diretórios e arquivos gerados (usando docker para evitar problemas de permissão e sudo)
+    docker run --rm -v "${BASE_DIR}:/data" alpine sh -c "rm -rf /data/besu-* /data/${JAVA_VERSION} /data/networkFiles /data/Permissioned-Network /data/genesis.json"
     echo "Limpeza concluída."
 }
 
@@ -183,6 +184,7 @@ main() {
         echo "[OK] Artefatos da rede Besu encontrados em ${BASE_DIR}"
         return
     fi
+    cd "${BASE_DIR}" || die "Erro ao acessar diretório base"
     cleanup               # Inicia limpando qualquer configuração anterior
     install_dependencies  # Instala e configura Besu e Java
     generate_keys_and_configs # Gera chaves e arquivos de permissão

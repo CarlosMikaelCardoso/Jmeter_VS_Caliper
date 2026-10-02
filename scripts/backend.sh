@@ -22,8 +22,8 @@ case "${BACKEND}" in
         ;;
     besu)
         case "${ACTION}" in
-            network-up) bash "${PROJECT_ROOT}/setup_besu_network.sh" ;;
-            network-check) bash "${PROJECT_ROOT}/setup_besu_network.sh" --check ;;
+            network-up) bash "${SCRIPT_DIR}/setup_besu_network.sh" ;;
+            network-check) bash "${SCRIPT_DIR}/setup_besu_network.sh" --check ;;
             network-down)
                 require_docker_access
                 [[ -f "${PROJECT_ROOT}/docker-compose.yaml" ]] || die "docker-compose.yaml do Besu não encontrado"

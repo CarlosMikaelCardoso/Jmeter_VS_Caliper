@@ -67,11 +67,15 @@ do
     MONITOR_PID=$!
 
     # 2. EXECUTAR OS TESTES JMeter (Chama o Executor)
-    echo "[RUN] Executando JMeter..."
+    echo "[RUN] Executando JMeter (${BACKEND})..."
     ROUND_FOLDER="${RESULTS_DIR}/round_${i}"
     mkdir -p "$ROUND_FOLDER"
-    # Passamos $i como argumento para que o executor saiba qual é a rodada atual
-    bash "${SCRIPT_DIR}/run_jmeter_api.sh" "$ROUND_FOLDER/api.log" "${WORKERS}" "${i}"
+    # Seleciona o executor correto baseado no BACKEND
+    if [[ "${BACKEND}" == "besu" ]]; then
+        bash "${SCRIPT_DIR}/run_jmeter_besu.sh" "$ROUND_FOLDER/api.log" "${WORKERS}" "${i}"
+    else
+        bash "${SCRIPT_DIR}/run_jmeter_api.sh" "$ROUND_FOLDER/api.log" "${WORKERS}" "${i}"
+    fi
 
     # 3. PARAR MONITORAMENTO
     kill $MONITOR_PID
