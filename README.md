@@ -1,116 +1,137 @@
-# JMeter vs Caliper
+# JMeter vs Caliper: Hyperledger Benchmarking Framework
 
-Projeto para comparar benchmarks de redes Hyperledger Fabric e Hyperledger
-Besu usando JMeter e Hyperledger Caliper. O fluxo comum é selecionado por
-`BACKEND` e executado a partir da raiz do projeto.
+Um framework unificado para comparar o desempenho de redes **Hyperledger Fabric** e **Hyperledger Besu** (com consenso QBFT) utilizando duas poderosas ferramentas de teste de carga: **Apache JMeter** e **Hyperledger Caliper**.
 
-## Pré-requisitos
+Este repositório consolida a configuração de infraestrutura, os middlewares de API, e a geração automática de gráficos e relatórios. O fluxo de execução muda dinamicamente de acordo com a variável `BACKEND` selecionada no arquivo `.env`.
 
-- Ubuntu 20.04, 22.04 ou 24.04 LTS com acesso a `sudo`;
-- Ubuntu 24.04 LTS (Noble) é a versão máxima recomendada pelo instalador;
-- usuário com permissão para usar Docker;
-- conexão com a internet durante a instalação das ferramentas e imagens Fabric.
+---
 
-Ubuntu 26.04 ainda não é considerado suportado para este laboratório. A
-combinação validada usa Docker 28.x com Fabric 2.5.14 e o repositório Docker
-para Ubuntu 24.04 (`noble`).
+## 🏗️ Estrutura do Projeto
 
-## Instalação
+- `benchmarks/`: Configurações e planos de teste organizados por ferramenta e backend (`caliper_fabric`, `caliper_besu`, `jmeter_fabric`, `jmeter_besu`).
+- `scripts/`: Scripts unificados em bash para automação de setup, orquestração de testes e geração de gráficos (`run_32_rounds_*.sh`).
+- `api-besu/`: Middleware em Node.js (Ethers.js/Express) que expõe endpoints assíncronos (`/open-async`, `/transfer-async`, `/query/:id`) para conectar o JMeter à rede Besu.
+- `middleware/`: Middleware em Node.js (Fabric Gateway) que expõe endpoints síncronos para a rede Fabric.
+- `results/`: Diretório gerado automaticamente que armazenará logs (`.jtl`, `.txt`) e os relatórios gráficos consolidados (PDF/PNG) após os testes.
+- `network/`: Repositório de configuração da test-network do Fabric.
+
+---
+
+## 🛠️ Pré-requisitos
+
+- Ubuntu 20.04, 22.04 ou 24.04 LTS (Noble) com acesso a `sudo`. Ubuntu 26.04 ainda não homologado.
+- Usuário com permissão para gerenciar grupos do Docker.
+- Conexão com a internet para download das imagens, binários e bibliotecas.
+
+---
+
+## ⚙️ 1. Instalação e Configuração Base
+
+O comando de setup cuidará da instalação do Docker Engine 28.x, Node.js 20+, npm, Python 3 + ambiente virtual (`.venv`), Java (para o JMeter), `jq`, `sar`, entre outros. 
 
 ```bash
+# 1. Clone o repositório e crie o seu arquivo de ambiente
 cp .env.example .env
+
+# 2. Instale todas as dependências do S.O.
 bash scripts/install_dependencies.sh
+
+# 3. Baixe e instale as dependências Node/Python internas
 npm run setup
 ```
 
-O instalador não altera automaticamente os grupos do usuário. Se o Docker
-retornar `permission denied`, execute manualmente:
-
+**Problemas com permissão no Docker?** Se receber `permission denied`, adicione seu usuário ao grupo do docker e reinicie a sessão:
 ```bash
 sudo usermod -aG docker "$USER"
 newgrp docker
-docker info
 ```
 
-Depois que `docker info` funcionar sem `sudo`, execute `npm run setup`.
+---
 
-Se o npm retornar `EACCES` dentro de `node_modules`, corrija o ownership uma
-vez, sem executar npm como root:
+## 🎯 2. Escolhendo o Backend (Fabric vs Besu)
 
-```bash
-sudo chown -R "$USER":"$(id -gn)" node_modules middleware/node_modules api-besu/node_modules
-npm run setup
+O comportamento do framework inteiro é ditado pelo seu arquivo `.env`. Abra-o e edite a variável `BACKEND`:
+
+```dotenv
+# Escolha "fabric" ou "besu"
+BACKEND=besu
+TOTAL_ROUNDS=32
+JMETER_WORKERS=5
+CALIPER_WORKERS=5
 ```
 
-O instalador configura Docker Engine 28.x, Docker Compose v2, Node.js 20+, npm, Go,
-Python, `jq`, `git`, `wget`, `curl`, `sar` e `netcat`. Esse deve ser o primeiro
-comando executado em uma máquina nova. Depois, `npm run setup`
-instala os pacotes Node pelos lockfiles e cria `.venv` com as dependências
-Python dos relatórios. Ajuste `.env` para mudar número de rodadas, workers,
-orderers, portas ou versões.
+### Para Hyperledger Fabric (`BACKEND=fabric`)
+O setup do Fabric já cuida de tudo automaticamente (criação do canal `mychannel` e deploy do chaincode).
+- **API (JMeter):** Ocorre na porta `3000`.
 
-Para somente verificar uma máquina já configurada:
+### Para Hyperledger Besu (`BACKEND=besu`)
+O setup do Besu gera um ambiente de laboratório completo com 6 nós validadores rodando consenso QBFT (`genesis_QBFT.json`).
+- **API (JMeter):** Ocorre na porta `3001` (com endpoints geradores de hash e fila de concorrência).
+- **Deploy Manual do Contrato:** Como o Besu exige transações assinadas, você precisa rodar o script de deploy fornecido para publicar o contrato na blockchain recém-criada antes dos benchmarks:
+  ```bash
+  npm run network:up       # Sobe a rede Besu (6 nós)
+  node deploy.js           # Faz o deploy e retorna o ADDRESS gerado
+  ```
+  *(Depois, copie o ADDRESS retornado e cole na variável `BESU_CONTRACT_ADDRESS` dentro do seu `.env` e também no campo "address" dentro do `benchmarks/caliper_besu/networkconfig.json`)*.
 
-```bash
-bash scripts/install_dependencies.sh --check
-```
+---
 
-## Rede Fabric (padrão)
+## 🚀 3. Levantando a Rede Blockchain
+
+O comando unificado analisa seu `.env` e inicia a infraestrutura correspondente:
 
 ```bash
 npm run network:up
-npm run network:down
 ```
+*(Para desligar e limpar tudo, use `npm run network:down`)*.
 
-Esse comando baixa os binários/amostras da versão configurada, recria o canal
-`FABRIC_CHANNEL`, instala o chaincode `FABRIC_CHAINCODE` e atualiza o perfil de
-conexão do middleware. Para alterar a quantidade de orderers, edite `ORDERERS`
-em `.env`.
+---
 
-## Benchmarks
+## 📊 4. Executando os Benchmarks
 
-Os benchmarks iniciam o monitor Docker automaticamente se a porta configurada
-estiver livre. O middleware da API JMeter continua sendo iniciado por rodada.
+Os scripts automatizam 100% da execução: iniciam as APIs, geram dados de entrada estocásticos (contas aleatórias e valores de transferências), acionam a ferramenta de stress, aguardam o esvaziamento das filas assíncronas (no Besu) e monitoram o uso de CPU e Memória (via `docker stats`).
 
+São **três baterias internas** por rodada: `Open` (escrita), `Query` (leitura) e `Transfer` (escrita concorrente).
+
+### Apache JMeter
 ```bash
 npm run benchmark:jmeter
+```
+> O JMeter dispara requisições HTTP para as nossas APIs (`middleware/` ou `api-besu/`). Os gráficos são gerados a cada rodada dentro da respectiva pasta em `results/jmeter_runs/round_X/graphs/`.
+
+### Hyperledger Caliper
+```bash
 npm run benchmark:caliper
 ```
+> O Caliper interage diretamente com o SDK nativo da blockchain (via Gateway ou Ethereum Connector) ignorando as nossas APIs Rest. Ele gera relatórios HTML e gráficos comparativos em `results/caliper_runs/round_X/graphs/`.
 
-Os resultados são salvos em `results/jmeter_runs` e `results/caliper_runs`,
-organizados por rodada. Para executar somente uma quantidade menor durante uma
-validação, use temporariamente `TOTAL_ROUNDS` no `.env`.
+*Dica: Você pode reduzir `TOTAL_ROUNDS` para 1 ou 2 no seu `.env` para realizar testes de homologação rápidos antes de uma bateria completa.*
 
-## Relatório
+---
+
+## 📈 5. Relatórios Finais e Gráficos
+
+Se a geração de gráficos acadêmicos não falhou por falta do LaTeX (`usetex=False` já configurado nativamente nos scripts Python via `matplotlib`), os gráficos detalhados estarão nas pastas das respectivas rodadas.
+
+Para consolidar todos os dados e gerar um comparativo unificado ao fim dos testes:
 
 ```bash
 npm run report
 ```
+Isso varrerá todas as pastas e criará um relatório holístico compilando a eficiência de cada backend nas transações ao longo das 32 rodadas!
 
-## Comandos úteis
+---
+
+## 🧰 Comandos Úteis
 
 ```bash
-(cd middleware && npm start)       # API JMeter, porta API_PORT
-(cd middleware && npm run monitor) # monitor Docker, porta MONITOR_PORT
-npm run install:all                 # reinstala dependências Node pelos locks
-BACKEND=fabric npm run api:start   # inicia a API Fabric
-BACKEND=besu npm run api:start     # inicia a API Besu
+# Iniciar as APIs manualmente para testes com Postman/Insomnia
+BACKEND=fabric npm run api:start
+BACKEND=besu npm run api:start
+
+# Iniciar apenas o monitor Docker do Fabric (porta 3005)
+(cd middleware && npm run monitor)
+
+# Reinstalar todas as dependências garantindo lockfiles (clean install)
+npm run install:all
 ```
-
-## Seleção do backend
-
-O backend padrão é Fabric. Para usar Besu, configure no `.env`:
-
-```dotenv
-BACKEND=besu
-BESU_DEPLOYER_PRIVATE_KEY=<segredo-local>
-BESU_CONTRACT_ADDRESS=<endereco-do-contrato>
-```
-
-O Besu usa a API na porta `3001` e o RPC padrão em `8545`; a API Fabric usa a
-porta `3000`. O endpoint `/health` verifica a disponibilidade do backend.
-
-O código da API e os artefatos da topologia Besu estão em `api-besu/`,
-`docker-compose.yaml`, `genesis_QBFT.json` e nos scripts de geração. O
-`.env.example` contém somente as credenciais padrão da rede local de laboratório;
-substitua-as em qualquer ambiente real e mantenha o `.env` fora do Git.
