@@ -6,7 +6,7 @@ Este repositório consolida a configuração de infraestrutura, os middlewares d
 
 ---
 
-## 🏗️ Estrutura do Projeto
+## Estrutura do Projeto
 
 - `benchmarks/`: Configurações e planos de teste organizados por ferramenta e backend (`caliper_fabric`, `caliper_besu`, `jmeter_fabric`, `jmeter_besu`).
 - `scripts/`: Scripts unificados em bash para automação de setup, orquestração de testes e geração de gráficos (`run_32_rounds_*.sh`).
@@ -17,7 +17,7 @@ Este repositório consolida a configuração de infraestrutura, os middlewares d
 
 ---
 
-## 🛠️ Pré-requisitos
+## Pré-requisitos
 
 - Ubuntu 20.04, 22.04 ou 24.04 LTS (Noble) com acesso a `sudo`. Ubuntu 26.04 ainda não homologado.
 - Usuário com permissão para gerenciar grupos do Docker.
@@ -25,7 +25,7 @@ Este repositório consolida a configuração de infraestrutura, os middlewares d
 
 ---
 
-## ⚙️ 1. Instalação e Configuração Base
+## 1. Instalação e Configuração Base
 
 O comando de setup cuidará da instalação do Docker Engine 28.x, Node.js 20+, npm, Python 3 + ambiente virtual (`.venv`), Java (para o JMeter), `jq`, `sar`, entre outros. 
 
@@ -48,7 +48,7 @@ newgrp docker
 
 ---
 
-## 🎯 2. Escolhendo o Backend (Fabric vs Besu)
+## 2. Escolhendo o Backend (Fabric vs Besu)
 
 O comportamento do framework inteiro é ditado pelo seu arquivo `.env`. Abra-o e edite a variável `BACKEND`:
 
@@ -76,7 +76,7 @@ O setup do Besu gera um ambiente de laboratório completo com 6 nós validadores
 
 ---
 
-## 🚀 3. Levantando a Rede Blockchain
+## 3. Levantando a Rede Blockchain
 
 O comando unificado analisa seu `.env` e inicia a infraestrutura correspondente:
 
@@ -109,7 +109,7 @@ npm run benchmark:caliper
 
 ---
 
-## 📈 5. Relatórios Finais e Gráficos
+## 5. Relatórios Finais e Gráficos
 
 Se a geração de gráficos acadêmicos não falhou por falta do LaTeX (`usetex=False` já configurado nativamente nos scripts Python via `matplotlib`), os gráficos detalhados estarão nas pastas das respectivas rodadas.
 
@@ -122,7 +122,7 @@ Isso varrerá todas as pastas e criará um relatório holístico compilando a ef
 
 ---
 
-## 🧰 Comandos Úteis
+## Comandos Úteis
 
 ```bash
 # Iniciar as APIs manualmente para testes com Postman/Insomnia
